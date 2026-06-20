@@ -1,0 +1,31 @@
+schema: spec-driven
+
+context: |
+  Monorepo: Turborepo + pnpm. Three workspaces:
+    - apps/web — Next.js 16 (App Router, React 19)
+    - apps/mobile — Expo 56 (expo-router, React Native 0.85)
+    - packages/backend — Convex (shared backend: schema, queries, mutations)
+  Language: TypeScript 6 strict mode. Tests: Vitest 4 (files colocated: foo.ts -> foo.test.ts).
+  Tooling: ESLint 9 + Prettier + Husky. Validate with `pnpm validate`
+  (typecheck -> lint -> format check -> test, fails fast).
+
+  Conventions:
+    - Lazy senior dev (ponytail): minimum code that works, stdlib/native/existing deps before new code,
+      no unrequested abstractions, deletion over addition. See .agents/rules/ponytail.md.
+    - Surgical changes: every changed line traces to the request; don't refactor untouched code.
+    - Import boundaries (ArchUnitTS in tests/): backend must not import from apps; apps must not import each other.
+
+  Testing policy — only test where it adds value:
+    - Unit: complex logic only (auth, state machines, algorithms, computed values). Not trivial CRUD/getters.
+    - Integration: convex-test in packages/backend; renderWithProviders for web components.
+    - E2E: critical web paths via Playwright (`pnpm test:e2e`, not part of validate).
+
+rules:
+  proposal:
+    - Keep it tight; sacrifice grammar for concision.
+    - Include a "Non-goals" section to bound scope.
+    - State assumptions explicitly; surface tradeoffs instead of picking silently.
+  tasks:
+    - Smallest verifiable steps; each task names how it's verified (a test or a command).
+    - Prefer reusing existing utilities/patterns over new code.
+    - Mark intentional simplifications with a `ponytail:` comment naming the ceiling + upgrade path.

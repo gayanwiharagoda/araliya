@@ -1,0 +1,10 @@
+node_modules/
+.next/
+dist/
+.convex/
+.expo/
+coverage/
+.turbo/
+pnpm-lock.yaml
+convex/_generated/
+.agents/skills/

@@ -1,0 +1,12 @@
+{
+  "_comment": "Copy to scripts/.openspec-sync.json to enable Projects v2 board wiring. Without it, the sync updates issues only. IDs are GraphQL node IDs captured from `gh project view/field-list` (see below).",
+  "owner": "gayanwiharagoda",
+  "projectNumber": 1,
+  "projectId": "PVT_xxxxxxxx",
+  "statusFieldId": "PVTSSF_xxxxxxxx",
+  "statusOptions": {
+    "Todo": "xxxxxxxx",
+    "In Progress": "xxxxxxxx",
+    "Done": "xxxxxxxx"
+  }
+}

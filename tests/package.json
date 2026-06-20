@@ -1,0 +1,11 @@
+{
+  "name": "@domus/arch-tests",
+  "private": true,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "archunit": "^2.3.0",
+    "vitest": "^4.1.9"
+  }
+}
