@@ -1,0 +1,18 @@
+{
+  "name": "@domus/backend",
+  "private": true,
+  "scripts": {
+    "dev": "npx convex dev",
+    "lint": "eslint --ignore-pattern convex/_generated .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "convex": "^1.42.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.9",
+    "typescript": "^6.0.3"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "DomusOS",
+    "slug": "domus-os",
+    "version": "1.0.0",
+    "scheme": "domusos",
+    "platforms": ["ios", "android"],
+    "newArchEnabled": true
+  }
+}

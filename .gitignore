@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+
+# build outputs
+dist/
+.next/
+.expo/
+*.tsbuildinfo
+
+# turbo
+.turbo/
+
+# convex
+.convex/
+
+# test / coverage
+coverage/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# os
+.DS_Store
+Thumbs.db
+
+# ide
+.idea/
+*.swp
+*.swo
