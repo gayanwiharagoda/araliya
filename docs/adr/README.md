@@ -10,13 +10,14 @@ An ADR captures one significant architectural decision: its context, the choice,
 
 ## Index
 
-| #                                              | Title                              | Status   |
-| ---------------------------------------------- | ---------------------------------- | -------- |
-| [0001](0001-record-architecture-decisions.md)  | Record architecture decisions      | Accepted |
-| [0002](0002-monorepo-turborepo-pnpm.md)        | Monorepo with Turborepo and pnpm   | Accepted |
-| [0003](0003-expo-for-mobile.md)                | Expo for mobile                    | Accepted |
-| [0004](0004-nextjs-for-web.md)                 | Next.js for web                    | Accepted |
-| [0005](0005-convex-backend.md)                 | Convex as backend and database     | Accepted |
-| [0006](0006-vitest-for-tdd.md)                 | Vitest for test-driven development | Accepted |
-| [0007](0007-typescript-strict-mode.md)         | TypeScript strict mode             | Accepted |
-| [0008](0008-deterministic-validation-gates.md) | Deterministic validation gates     | Accepted |
+| #                                                        | Title                                    | Status   |
+| -------------------------------------------------------- | ---------------------------------------- | -------- |
+| [0001](0001-record-architecture-decisions.md)            | Record architecture decisions            | Accepted |
+| [0002](0002-monorepo-turborepo-pnpm.md)                  | Monorepo with Turborepo and pnpm         | Accepted |
+| [0003](0003-expo-for-mobile.md)                          | Expo for mobile                          | Accepted |
+| [0004](0004-nextjs-for-web.md)                           | Next.js for web                          | Accepted |
+| [0005](0005-convex-backend.md)                           | Convex as backend and database           | Accepted |
+| [0006](0006-vitest-for-tdd.md)                           | Vitest for test-driven development       | Accepted |
+| [0007](0007-typescript-strict-mode.md)                   | TypeScript strict mode                   | Accepted |
+| [0008](0008-deterministic-validation-gates.md)           | Deterministic validation gates           | Accepted |
+| [0009](0009-automated-release-and-commit-conventions.md) | Automated release and commit conventions | Proposed |
