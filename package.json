@@ -16,6 +16,7 @@
     "typecheck": "turbo typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "sdlc": "pnpm --filter @domus/sdlc sdlc",
     "openspec:sync": "node scripts/openspec-sync.mjs",
     "openspec:sync:test": "node --test scripts/*.test.mjs",
     "validate": "turbo typecheck lint && prettier --check . && turbo test",

@@ -44,4 +44,26 @@ describe("architecture boundaries", () => {
 
     await expect(rule).toPassAsync({ allowEmptyTests: true });
   });
+
+  // The SDLC orchestrator (ADR 0010) is dev-tooling: it shells out to git/gh/pnpm/claude
+  // and must stay isolated from app code — imports nothing from apps/backend, imported by none.
+  it("sdlc orchestrator must not depend on apps or backend", async () => {
+    const rule = projectFiles("../tooling/sdlc/tsconfig.json")
+      .inPath("tooling/sdlc")
+      .shouldNot()
+      .dependOnFiles()
+      .inPath(/apps\/|packages\/backend/);
+
+    await expect(rule).toPassAsync({ allowEmptyTests: true });
+  });
+
+  it("backend must not depend on sdlc orchestrator", async () => {
+    const rule = projectFiles("../packages/backend/convex/tsconfig.json")
+      .inPath("packages/backend")
+      .shouldNot()
+      .dependOnFiles()
+      .inPath("tooling/sdlc");
+
+    await expect(rule).toPassAsync({ allowEmptyTests: true });
+  });
 });
