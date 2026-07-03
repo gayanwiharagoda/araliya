@@ -1,15 +1,16 @@
 import { z } from "zod";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
+import { runShell, repoRoot, isDryRun, runGated } from "./shell.js";
 
 /**
- * Walking skeleton (ADR 0010, tasks group 1). Every stage is a deterministic
- * no-op that appends its id to `trace`. The trace is the proof of a
- * deterministic control plane: a given input always yields the same ordered
- * trace, and a replayed run reaches the same terminal trace.
+ * SDLC stage graph (ADR 0010). Every stage appends its id to `trace` — the proof
+ * of a deterministic control plane: a given input yields the same ordered trace,
+ * and a replayed run reaches the same terminal trace.
  *
- * ponytail: no models here by design — the skeleton proves suspend/resume/replay
- * with zero token spend. Groups 2–4 swap the no-ops for real tooling/agent calls
- * (sync→`pnpm openspec:sync`, build→`/opsx:apply`, validate→`pnpm validate`, …).
+ * Group 2 wires the deterministic stages (sync/validate/release/archive) to real
+ * tooling, gating on exit codes. The agent stages (propose/build/review/commit-pr)
+ * stay no-op pass-throughs until groups 3–4. `SDLC_DRY_RUN=1` skips subprocess
+ * execution so the control-plane tests stay hermetic and token-free.
  */
 export const Ctx = z.object({
   changeName: z.string(),
@@ -54,6 +55,30 @@ const gate = (id: string) =>
     },
   });
 
+/**
+ * A deterministic stage that shells out to real tooling and gates on exit code:
+ * a non-zero exit fails the run. Dry-run records the stage without executing.
+ */
+const shellStage = (id: string, cmd: (ctx: Ctx) => string) =>
+  createStep({
+    id,
+    inputSchema: Ctx,
+    outputSchema: Ctx,
+    execute: async ({ inputData }) => {
+      if (!isDryRun()) runGated(id, cmd(inputData));
+      return { ...inputData, trace: [...inputData.trace, id] };
+    },
+  });
+
+// ponytail: live release-please needs GITHUB_TOKEN + repo url (outward-facing,
+// deferred to groups 3–5). The stage is wired and exit-code-gated now; supply
+// SDLC_REPO_URL + GITHUB_TOKEN via env to run it for real.
+const releaseCmd = () =>
+  `npx release-please release-pr --repo-url="${process.env.SDLC_REPO_URL ?? ""}" --token="${process.env.GITHUB_TOKEN ?? ""}"`;
+
+const archiveCmd = (ctx: Ctx) =>
+  `openspec archive ${ctx.changeName} -y && pnpm openspec:sync`;
+
 const build = createStep({
   id: "build",
   inputSchema: Ctx,
@@ -69,12 +94,15 @@ const validate = createStep({
   id: "validate",
   inputSchema: Ctx,
   outputSchema: Ctx,
-  // ponytail: skeleton always passes. Task 2.2 shells `pnpm validate` and sets
-  // `validatePassed` from its exit code; task 3.6 caps the retry loop at 3.
+  // Exit code of `pnpm validate` drives the branch signal; the dountil loop retries
+  // build↔validate. ponytail: after 3 failed attempts the loop currently proceeds;
+  // task 3.6 changes that to suspend for a human with the accumulated failure log.
   execute: async ({ inputData }) => ({
     ...inputData,
     trace: [...inputData.trace, "validate"],
-    validatePassed: true,
+    validatePassed: isDryRun()
+      ? true
+      : runShell("pnpm validate", repoRoot()).code === 0,
   }),
 });
 
@@ -95,7 +123,7 @@ export const sdlcWorkflow = createWorkflow({
 })
   .then(noop("propose"))
   .then(gate("plan-gate"))
-  .then(noop("sync"))
+  .then(shellStage("sync", () => "pnpm openspec:sync"))
   .dountil(
     buildValidate,
     async ({ inputData }) =>
@@ -104,9 +132,9 @@ export const sdlcWorkflow = createWorkflow({
   .then(noop("review"))
   .then(noop("commit-pr"))
   .then(gate("merge-gate"))
-  .then(noop("release"))
+  .then(shellStage("release", releaseCmd))
   .then(gate("release-gate"))
-  .then(noop("archive"))
+  .then(shellStage("archive", archiveCmd))
   .commit();
 
 /** Initial context for a fresh run. */

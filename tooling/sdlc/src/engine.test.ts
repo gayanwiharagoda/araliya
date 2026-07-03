@@ -4,6 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createEngine, startRun, resumeRun } from "./engine.js";
 
+// Control-plane tests are hermetic: dry-run skips the real subprocess stages
+// (sync/validate/release/archive) so we exercise ordering/suspend/resume only.
+process.env.SDLC_DRY_RUN = "1";
+
 const tempDb = () => join(mkdtempSync(join(tmpdir(), "sdlc-")), "runs.db");
 
 const EXPECTED_TRACE = [
