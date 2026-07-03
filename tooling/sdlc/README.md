@@ -82,10 +82,21 @@ pnpm sdlc --issue https://github.com/gayanwiharagoda/araliya/issues/42   # a lin
 | **merge**   | the feature PR        | approve/reject via CLI (auto-resume-on-merge is Group 5, not yet built) |
 | **release** | the release-please PR | approve/reject via CLI                                                  |
 
-## Per-stage models (mix and match)
+## Per-stage agents & models
 
-Agentic file-editing stages (`propose`, `build`) are pinned to Claude. The cheap reasoning
-stages are swappable via `SDLC_MODEL_<STAGE>`:
+Each agentic stage runs as a subagent defined in [`.agents/agents/`](../../.agents/agents/)
+(discovered via the `.claude/agents` symlink). The agent file is the single place that pins
+the stage's **model** (frontmatter) and its **tool scope** — right-sized per job:
+
+| Agent       | Stage     | Model  | Drives          |
+| ----------- | --------- | ------ | --------------- |
+| `proposer`  | propose   | opus   | `/opsx:propose` |
+| `builder`   | build     | opus   | `/opsx:apply`   |
+| `reviewer`  | review    | sonnet | judges the diff |
+| `committer` | commit-pr | haiku  | commit subject  |
+
+The cheap reasoning stages (`review`, `commit-pr`) are still swappable via `SDLC_MODEL_<STAGE>`,
+which overrides the agent's frontmatter model:
 
 ```sh
 SDLC_MODEL_REVIEW=ollama/llama3        pnpm sdlc add-dark-mode   # local, no key

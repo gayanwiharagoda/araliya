@@ -23,9 +23,16 @@ export function parseModel(spec: string): { provider: string; name?: string } {
   };
 }
 
+export interface ModelOptions {
+  /** Run the claude call as a named subagent (`.claude/agents/<name>.md`). Claude-only. */
+  agent?: string;
+  cwd?: string;
+}
+
 export async function runModel(
   prompt: string,
   spec = "claude",
+  opts: ModelOptions = {},
 ): Promise<string> {
   if (isDryRun()) return JSON.stringify({ dryRun: true, verdict: "approve" });
   const { provider, name } = parseModel(spec);
@@ -34,7 +41,10 @@ export async function runModel(
     assertNoApiKey();
     const args = ["-p", prompt, "--output-format", "json"];
     if (name) args.push("--model", name);
-    const { stdout } = runShellArgs("claude", args);
+    // Route through a subagent when asked; its frontmatter picks the model unless
+    // SDLC_MODEL_<STAGE> overrode it above. Agents are a Claude-only concept.
+    if (opts.agent) args.push("--agent", opts.agent);
+    const { stdout } = runShellArgs("claude", args, opts.cwd);
     try {
       return (JSON.parse(stdout) as { result?: string }).result ?? stdout;
     } catch {

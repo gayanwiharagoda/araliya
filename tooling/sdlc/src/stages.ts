@@ -34,6 +34,9 @@ const GateSuspend = z.object({ gate: z.string(), changeName: z.string() });
 /** First JSON object in a model's text response (models often wrap it in prose). */
 const extractJson = (s: string): string => s.match(/\{[\s\S]*\}/)?.[0] ?? s;
 
+/** Announce a stage as it runs — the run's live progress trail (stderr, off captured stdout). */
+const announce = (id: string): void => console.error(`\n▶ ${id}`);
+
 /**
  * A human gate: first execution suspends; resuming with `{ approved: true }`
  * proceeds, `{ approved: false }` fails the run (stops before the next stage).
@@ -47,6 +50,7 @@ const gate = (id: string) =>
     resumeSchema: GateResume,
     suspendSchema: GateSuspend,
     execute: async ({ inputData, resumeData, suspend }) => {
+      announce(id);
       if (!resumeData)
         return await suspend({ gate: id, changeName: inputData.changeName });
       if (!resumeData.approved) throw new Error(`${id}: rejected`);
@@ -64,6 +68,7 @@ const shellStage = (id: string, cmd: (ctx: Ctx) => string) =>
     inputSchema: Ctx,
     outputSchema: Ctx,
     execute: async ({ inputData }) => {
+      announce(id);
       if (!isDryRun()) runGated(id, cmd(inputData), inputData.cwd);
       return { ...inputData, trace: [...inputData.trace, id] };
     },
@@ -78,16 +83,8 @@ const releaseCmd = () =>
 const archiveCmd = (ctx: Ctx) =>
   `openspec archive ${ctx.changeName} -y && pnpm openspec:sync`;
 
-const AGENT_TOOLS = [
-  "Read",
-  "Edit",
-  "Write",
-  "Glob",
-  "Grep",
-  "Bash",
-  "Skill",
-  "TodoWrite",
-];
+// Tool scope now lives in each agent's frontmatter (proposer.md / builder.md); the CLI
+// still enforces the hard push deny — it composes with --agent.
 const NO_PUSH = ["Bash(git push:*)", "Bash(gh:*)"];
 
 // Thin agent: the /opsx:propose skill writes proposal/specs/tasks. Claude-pinned
@@ -97,13 +94,14 @@ const propose = createStep({
   inputSchema: Ctx,
   outputSchema: Ctx,
   execute: async ({ inputData }) => {
+    announce("propose");
     if (!isDryRun()) {
       // The issue detail becomes the spec context; from here OpenSpec drives the run.
       const prompt = inputData.brief.trim()
         ? `/opsx:propose ${inputData.changeName}\n\nContext from the GitHub issue:\n${inputData.brief}`
         : `/opsx:propose ${inputData.changeName}`;
       runSkill(prompt, {
-        allowedTools: AGENT_TOOLS,
+        agent: "proposer",
         disallowedTools: NO_PUSH,
         maxTurns: 100,
         cwd: inputData.cwd,
@@ -121,11 +119,13 @@ const review = createStep({
   inputSchema: Ctx,
   outputSchema: Ctx,
   execute: async ({ inputData }) => {
+    announce("review");
     if (!isDryRun()) {
       const diff = runShell("git diff HEAD~1", inputData.cwd).stdout;
       const out = await runModel(
-        `Review this diff. Respond ONLY with JSON {"verdict":"approve"|"request-changes","notes":string}.\n\n${diff}`,
+        `Review this diff and return your verdict JSON.\n\n${diff}`,
         stageModel("review"),
+        { agent: "reviewer", cwd: inputData.cwd },
       );
       JSON.parse(extractJson(out));
     }
@@ -141,12 +141,14 @@ const commitPr = createStep({
   inputSchema: Ctx,
   outputSchema: Ctx,
   execute: async ({ inputData }) => {
+    announce("commit-pr");
     if (!isDryRun()) {
       runGated("stage", "git add -A", inputData.cwd);
       const diff = runShell("git diff --cached", inputData.cwd).stdout;
       const raw = await runModel(
-        `Write a single Conventional Commit subject line (<=72 chars) for change "${inputData.changeName}". Reply with only the line.\n\n${diff}`,
+        `Write the Conventional Commit subject line for change "${inputData.changeName}".\n\n${diff}`,
         stageModel("commit-pr"),
+        { agent: "committer", cwd: inputData.cwd },
       );
       const subject = raw.trim().split("\n")[0];
       runGated(
@@ -178,9 +180,10 @@ const build = createStep({
   // Thin agent: delegate to the /opsx:apply skill (subscription-billed). We ignore
   // its self-report — success is decided by `validate` below, not the model.
   execute: async ({ inputData }) => {
+    announce("build");
     if (!isDryRun()) {
       runSkill(`/opsx:apply ${inputData.changeName}`, {
-        allowedTools: AGENT_TOOLS,
+        agent: "builder",
         disallowedTools: NO_PUSH, // build must not push
         maxTurns: 200,
         cwd: inputData.cwd,
@@ -201,6 +204,7 @@ const validate = createStep({
   // Artifacts, not self-report: build is done only when every tasks.md box is
   // checked AND `pnpm validate` exits 0. This is the branch signal for the loop.
   execute: async ({ inputData }) => {
+    announce("validate");
     const passed = isDryRun()
       ? true
       : allTasksChecked(inputData.changeName, inputData.cwd) &&
@@ -224,6 +228,7 @@ const buildResult = createStep({
   resumeSchema: z.object({ proceed: z.boolean() }),
   suspendSchema: z.object({ reason: z.string(), attempts: z.number() }),
   execute: async ({ inputData, resumeData, suspend }) => {
+    announce("build-result");
     if (inputData.validatePassed)
       return { ...inputData, trace: [...inputData.trace, "build-result"] };
     if (!resumeData)
