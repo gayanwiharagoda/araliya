@@ -61,9 +61,10 @@ OpenSpec spec drives the rest of the run:
 
 ```sh
 pnpm sdlc --issue 42
+pnpm sdlc --issue https://github.com/gayanwiharagoda/araliya/issues/42   # a link works too
 ```
 
-1. `gh issue view 42` → the **title** becomes the change name, the **body** becomes the brief.
+1. `gh issue view <n|url>` → the **title** becomes the change name, the **body** becomes the brief.
 2. The sync marker `<!-- openspec:<name> -->` is written into issue #42 so `openspec:sync`
    **adopts** #42 as the tracking issue (its checklist follows `tasks.md`) instead of creating
    a duplicate.

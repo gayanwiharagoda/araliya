@@ -1,5 +1,29 @@
 import { describe, it, expect } from "vitest";
-import { issueToChangeName, markerFor, withMarker } from "./issue.js";
+import {
+  issueToChangeName,
+  markerFor,
+  withMarker,
+  normalizeIssueRef,
+} from "./issue.js";
+
+describe("issue ref (number or URL)", () => {
+  it("accepts a bare issue number", () => {
+    expect(normalizeIssueRef("42")).toBe("42");
+    expect(normalizeIssueRef("  42 ")).toBe("42");
+  });
+
+  it("accepts a full GitHub issue URL", () => {
+    const url = "https://github.com/gayanwiharagoda/araliya/issues/42";
+    expect(normalizeIssueRef(url)).toBe(url);
+  });
+
+  it("rejects anything else", () => {
+    expect(() => normalizeIssueRef("not-a-ref")).toThrow(
+      /issue number or GitHub issue URL/,
+    );
+    expect(() => normalizeIssueRef("")).toThrow();
+  });
+});
 
 describe("issue → change name", () => {
   it("kebab-cases an issue title", () => {

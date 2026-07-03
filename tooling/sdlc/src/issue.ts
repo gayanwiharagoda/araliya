@@ -33,13 +33,29 @@ export function withMarker(body: string, changeName: string): string {
   return body.includes(mk) ? body : `${mk}\n${body}`;
 }
 
-/** Live: read an issue via `gh`. */
-export function fetchIssue(n: number): Issue {
+/**
+ * Accept an issue **number** or a full GitHub issue/PR **URL** (both are valid
+ * `gh` selectors). Validated before it reaches a shell command.
+ */
+export function normalizeIssueRef(ref: string): string {
+  const trimmed = ref.trim();
+  if (/^\d+$/.test(trimmed)) return trimmed;
+  if (
+    /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/(issues|pull)\/\d+(\?[^\s]*)?$/.test(
+      trimmed,
+    )
+  )
+    return trimmed;
+  throw new Error(`not an issue number or GitHub issue URL: ${ref}`);
+}
+
+/** Live: read an issue via `gh` (ref = number or URL). */
+export function fetchIssue(ref: string): Issue {
   const { code, stdout, stderr } = runShell(
-    `gh issue view ${n} --json number,title,body`,
+    `gh issue view ${ref} --json number,title,body`,
   );
   if (code !== 0)
-    throw new Error(`gh issue view ${n} failed: ${stderr.trim()}`);
+    throw new Error(`gh issue view ${ref} failed: ${stderr.trim()}`);
   const raw = JSON.parse(stdout) as {
     number: number;
     title: string;
@@ -49,10 +65,10 @@ export function fetchIssue(n: number): Issue {
 }
 
 /** Live: seed the marker into the issue so the sync stage adopts it as the tracking issue. */
-export function adoptIssue(n: number, changeName: string): void {
-  const issue = fetchIssue(n);
+export function adoptIssue(ref: string, changeName: string): void {
+  const issue = fetchIssue(ref);
   const body = withMarker(issue.body, changeName);
   if (body !== issue.body) {
-    runShell(`gh issue edit ${n} --body ${JSON.stringify(body)}`);
+    runShell(`gh issue edit ${ref} --body ${JSON.stringify(body)}`);
   }
 }
