@@ -49,8 +49,13 @@ export function repoRoot(): string {
 /** Dry-run skips real subprocess execution — keeps the control-plane tests hermetic. */
 export const isDryRun = (): boolean => process.env.SDLC_DRY_RUN === "1";
 
-/** Run a command and throw on non-zero exit — the deterministic stage gate. */
+/**
+ * Run a command, streaming its output to the terminal live, and throw on non-zero
+ * exit — the deterministic stage gate. Inherited stdio means you SEE `pnpm validate`,
+ * `openspec:sync`, commit, archive, etc. as they run instead of a silent black box.
+ */
 export function runGated(label: string, cmd: string, cwd = repoRoot()): void {
-  const { code, stderr } = runShell(cmd, cwd);
-  if (code !== 0) throw new Error(`${label} failed (exit ${code}): ${stderr}`);
+  const code =
+    spawnSync(cmd, { shell: true, stdio: "inherit", cwd }).status ?? 1;
+  if (code !== 0) throw new Error(`${label} failed (exit ${code})`);
 }

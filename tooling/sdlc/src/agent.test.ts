@@ -15,7 +15,10 @@ describe("thin agent layer", () => {
     });
     expect(args).toContain("-p");
     expect(args).toContain("/opsx:apply demo");
-    expect(args).toEqual(expect.arrayContaining(["--output-format", "json"]));
+    expect(args).toEqual(
+      expect.arrayContaining(["--output-format", "stream-json"]),
+    );
+    expect(args).toContain("--verbose");
     expect(args).toEqual(
       expect.arrayContaining(["--allowedTools", "Read,Edit"]),
     );
@@ -23,6 +26,11 @@ describe("thin agent layer", () => {
       expect.arrayContaining(["--disallowedTools", "Bash(git push:*)"]),
     );
     expect(args).toEqual(expect.arrayContaining(["--max-turns", "200"]));
+  });
+
+  it("routes through a named subagent when opts.agent is set", () => {
+    const args = buildClaudeArgs("/opsx:apply demo", { agent: "builder" });
+    expect(args).toEqual(expect.arrayContaining(["--agent", "builder"]));
   });
 
   it("fails fast when ANTHROPIC_API_KEY is set (subscription-only)", () => {
