@@ -28,11 +28,11 @@
 
 ## 4. Remaining agent stages + per-stage models
 
-- [ ] 4.1 `propose` stage → `/opsx:propose` via Claude Code, scoped tools (no push)
-- [ ] 4.2 `review` stage → `/code-review` via a swappable model (Ollama/OpenAI), emits verdict JSON parsed deterministically
-- [ ] 4.3 `commit/PR` stage → commit-message via cheap/local model; commitlint check + `gh pr create`; success = commitlint passes AND `gh pr view` returns a PR
-- [ ] 4.4 Per-stage model config surface (pin build/propose to Claude; review/commit-msg swappable)
-- [ ] 4.5 **Verify:** `review` runs against a local Ollama model with no code change; `release` scoped tools cannot edit source
+- [x] 4.1 `propose` stage → `/opsx:propose` via `runSkill` (Claude-pinned), scoped tools (no push)
+- [x] 4.2 `review` stage → swappable model (`runModel`, `SDLC_MODEL_REVIEW`), emits verdict JSON parsed deterministically (unparseable → stage fails). Uses a reasoning prompt, not the Claude-only `/code-review` skill, so it can run on Ollama/OpenAI.
+- [x] 4.3 `commit/PR` stage → commit-message via swappable model; commitlint check + `git commit` + `gh pr create`; success = commitlint passes AND `gh pr view` returns a PR (live `gh` deferred)
+- [x] 4.4 Per-stage model config surface: `stageModel()` reads `SDLC_MODEL_<STAGE>` (build/propose pinned to Claude; review/commit-pr swappable to `ollama/*`/`openai/*`)
+- [ ] 4.5 **Verify (LIVE — needs Ollama):** `review` against a local Ollama model. (Hermetic done: model routing/override/parse, dry-run short-circuit, openai-key guard; `release` is a deterministic shellStage with no agent tools, so it inherently cannot edit source.)
 
 ## 5. PR-backed gates
 

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { runShell, isDryRun, runGated } from "./shell.js";
 import { runSkill } from "./agent.js";
+import { runModel, stageModel } from "./model.js";
 import { allTasksChecked } from "./artifacts.js";
 
 /**
@@ -10,9 +11,10 @@ import { allTasksChecked } from "./artifacts.js";
  * and a replayed run reaches the same terminal trace.
  *
  * Deterministic stages (sync/validate/release/archive) shell real tooling and gate
- * on exit codes. `build` is a thin agent over the `/opsx:apply` skill (subscription);
- * propose/review/commit-pr stay no-op until group 4. `SDLC_DRY_RUN=1` skips all
- * subprocess/agent execution so the control-plane tests stay hermetic and token-free.
+ * on exit codes. Agent stages are thin: propose/build reuse the `/opsx:*` skills on
+ * the Claude subscription; review/commit-pr are model-swappable reasoning calls
+ * (see model.ts). `SDLC_DRY_RUN=1` skips all subprocess/agent/model execution so the
+ * control-plane tests stay hermetic and token-free.
  */
 export const Ctx = z.object({
   changeName: z.string(),
@@ -27,17 +29,8 @@ export type Ctx = z.infer<typeof Ctx>;
 const GateResume = z.object({ approved: z.boolean() });
 const GateSuspend = z.object({ gate: z.string(), changeName: z.string() });
 
-/** A deterministic pass-through stage that records itself in the trace. */
-const noop = (id: string) =>
-  createStep({
-    id,
-    inputSchema: Ctx,
-    outputSchema: Ctx,
-    execute: async ({ inputData }) => ({
-      ...inputData,
-      trace: [...inputData.trace, id],
-    }),
-  });
+/** First JSON object in a model's text response (models often wrap it in prose). */
+const extractJson = (s: string): string => s.match(/\{[\s\S]*\}/)?.[0] ?? s;
 
 /**
  * A human gate: first execution suspends; resuming with `{ approved: true }`
@@ -83,6 +76,95 @@ const releaseCmd = () =>
 const archiveCmd = (ctx: Ctx) =>
   `openspec archive ${ctx.changeName} -y && pnpm openspec:sync`;
 
+const AGENT_TOOLS = [
+  "Read",
+  "Edit",
+  "Write",
+  "Glob",
+  "Grep",
+  "Bash",
+  "Skill",
+  "TodoWrite",
+];
+const NO_PUSH = ["Bash(git push:*)", "Bash(gh:*)"];
+
+// Thin agent: the /opsx:propose skill writes proposal/specs/tasks. Claude-pinned
+// (agentic, edits files). The human reviews at the plan gate that follows.
+const propose = createStep({
+  id: "propose",
+  inputSchema: Ctx,
+  outputSchema: Ctx,
+  execute: async ({ inputData }) => {
+    if (!isDryRun()) {
+      runSkill(`/opsx:propose ${inputData.changeName}`, {
+        allowedTools: AGENT_TOOLS,
+        disallowedTools: NO_PUSH,
+        maxTurns: 100,
+        cwd: inputData.cwd,
+      });
+    }
+    return { ...inputData, trace: [...inputData.trace, "propose"] };
+  },
+});
+
+// Reasoning stage, model-swappable (SDLC_MODEL_REVIEW → claude|ollama|openai).
+// Emits a verdict JSON we parse deterministically; the human decides at the merge
+// gate. An unparseable verdict fails the stage (artifacts, not vibes).
+const review = createStep({
+  id: "review",
+  inputSchema: Ctx,
+  outputSchema: Ctx,
+  execute: async ({ inputData }) => {
+    if (!isDryRun()) {
+      const diff = runShell("git diff HEAD~1", inputData.cwd).stdout;
+      const out = await runModel(
+        `Review this diff. Respond ONLY with JSON {"verdict":"approve"|"request-changes","notes":string}.\n\n${diff}`,
+        stageModel("review"),
+      );
+      JSON.parse(extractJson(out));
+    }
+    return { ...inputData, trace: [...inputData.trace, "review"] };
+  },
+});
+
+// Commit message from a cheap/swappable model; commit + PR are deterministic.
+// Success = commitlint passes AND `gh pr view` returns a PR. Outward-facing
+// (git/gh), so it runs only outside dry-run — the operator drives the first live one.
+const commitPr = createStep({
+  id: "commit-pr",
+  inputSchema: Ctx,
+  outputSchema: Ctx,
+  execute: async ({ inputData }) => {
+    if (!isDryRun()) {
+      runGated("stage", "git add -A", inputData.cwd);
+      const diff = runShell("git diff --cached", inputData.cwd).stdout;
+      const raw = await runModel(
+        `Write a single Conventional Commit subject line (<=72 chars) for change "${inputData.changeName}". Reply with only the line.\n\n${diff}`,
+        stageModel("commit-pr"),
+      );
+      const subject = raw.trim().split("\n")[0];
+      runGated(
+        "commitlint",
+        `printf '%s' ${JSON.stringify(subject)} | pnpm exec commitlint`,
+        inputData.cwd,
+      );
+      runGated(
+        "commit",
+        `git commit -m ${JSON.stringify(subject)}`,
+        inputData.cwd,
+      );
+      runGated(
+        "pr",
+        `gh pr create --fill --head sdlc/${inputData.changeName}`,
+        inputData.cwd,
+      );
+      if (runShell("gh pr view --json number", inputData.cwd).code !== 0)
+        throw new Error("commit-pr: no PR created");
+    }
+    return { ...inputData, trace: [...inputData.trace, "commit-pr"] };
+  },
+});
+
 const build = createStep({
   id: "build",
   inputSchema: Ctx,
@@ -92,17 +174,8 @@ const build = createStep({
   execute: async ({ inputData }) => {
     if (!isDryRun()) {
       runSkill(`/opsx:apply ${inputData.changeName}`, {
-        allowedTools: [
-          "Read",
-          "Edit",
-          "Write",
-          "Glob",
-          "Grep",
-          "Bash",
-          "Skill",
-          "TodoWrite",
-        ],
-        disallowedTools: ["Bash(git push:*)", "Bash(gh:*)"], // build must not push
+        allowedTools: AGENT_TOOLS,
+        disallowedTools: NO_PUSH, // build must not push
         maxTurns: 200,
         cwd: inputData.cwd,
       });
@@ -174,7 +247,7 @@ export const sdlcWorkflow = createWorkflow({
   inputSchema: Ctx,
   outputSchema: Ctx,
 })
-  .then(noop("propose"))
+  .then(propose)
   .then(gate("plan-gate"))
   .then(shellStage("sync", () => "pnpm openspec:sync"))
   .dountil(
@@ -183,8 +256,8 @@ export const sdlcWorkflow = createWorkflow({
       inputData.validatePassed || inputData.attempts >= 3,
   )
   .then(buildResult)
-  .then(noop("review"))
-  .then(noop("commit-pr"))
+  .then(review)
+  .then(commitPr)
   .then(gate("merge-gate"))
   .then(shellStage("release", releaseCmd))
   .then(gate("release-gate"))
