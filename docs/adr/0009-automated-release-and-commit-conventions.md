@@ -4,6 +4,11 @@
 - Date: 2026-07-02
 - Deciders: DomusOS team
 
+> **Revision (2026-07-03, see [ADR 0010](0010-agentic-sdlc-orchestrator.md)):** release-please
+> runs via its **local CLI** driven by the SDLC orchestrator, **not** as a GitHub Action — the
+> workflow is local and does not use GitHub Actions. Release semantics are unchanged
+> (Release-PR → tags → per-package `CHANGELOG.md`).
+
 ## Context
 
 DomusOS needs a repeatable way to version releases, generate changelogs, and tag

@@ -10,11 +10,11 @@
 
 ## 2. Deterministic stages (no models)
 
-- [ ] 2.1 `sync` stage → shells `pnpm openspec:sync`; gate on exit code
-- [ ] 2.2 `validate` stage → shells `pnpm validate`; expose pass/fail as the branch signal
-- [ ] 2.3 `release` stage → shells the **release-please CLI** locally (not a GitHub Action)
-- [ ] 2.4 `archive` stage → shells `/opsx:archive` equivalent + `pnpm openspec:sync`
-- [ ] 2.5 **Verify:** each stage invokes real tooling and gates correctly on exit codes (test with a throwaway change)
+- [x] 2.1 `sync` stage → shells `pnpm openspec:sync`; gate on exit code
+- [x] 2.2 `validate` stage → shells `pnpm validate`; expose pass/fail as the branch signal
+- [x] 2.3 `release` stage → shells the **release-please CLI** locally (not a GitHub Action)
+- [x] 2.4 `archive` stage → shells `openspec archive <change> -y` + `pnpm openspec:sync`
+- [x] 2.5 **Verify:** exit-code gating proven (`runGated` passes on exit 0, throws on non-zero); dry-run e2e proves ordering. Live release-please needs GITHUB_TOKEN (deferred).
 
 ## 3. First agent stage — build (Claude subscription)
 
@@ -42,7 +42,7 @@
 
 ## 6. ADR 0009 pieces
 
-- [ ] 6.1 Add `@commitlint/cli` + `config-conventional`; wire Husky `commit-msg` hook
-- [ ] 6.2 Add `release-please-config.json` + `.release-please-manifest.json` (seed web 0.1.0, mobile 1.0.0, assign backend a baseline)
-- [ ] 6.3 Add revision note to ADR 0009 (release-please via local CLI, not GitHub Action)
-- [ ] 6.4 **Verify:** a malformed commit is rejected by the hook; `release` stage cuts a Release-PR via the CLI
+- [x] 6.1 Add `@commitlint/cli` + `config-conventional`; wire Husky `commit-msg` hook
+- [x] 6.2 Add `release-please-config.json` + `.release-please-manifest.json` (seed web 0.1.0, mobile 1.0.0, backend baseline 0.0.0)
+- [x] 6.3 Add revision note to ADR 0009 (release-please via local CLI, not GitHub Action)
+- [x] 6.4 **Verify:** malformed commit rejected by commitlint (exit 1), conventional accepted (exit 0), release-please CLI invokable. Live Release-PR cut needs GITHUB_TOKEN (deferred).
