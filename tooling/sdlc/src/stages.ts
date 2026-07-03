@@ -20,6 +20,8 @@ export const Ctx = z.object({
   changeName: z.string(),
   // Working directory for this run — the run's git worktree, or repo root in dry-run.
   cwd: z.string(),
+  // Issue-driven context fed to `/opsx:propose`; empty for name-only runs.
+  brief: z.string(),
   trace: z.array(z.string()),
   validatePassed: z.boolean(),
   attempts: z.number(),
@@ -96,7 +98,11 @@ const propose = createStep({
   outputSchema: Ctx,
   execute: async ({ inputData }) => {
     if (!isDryRun()) {
-      runSkill(`/opsx:propose ${inputData.changeName}`, {
+      // The issue detail becomes the spec context; from here OpenSpec drives the run.
+      const prompt = inputData.brief.trim()
+        ? `/opsx:propose ${inputData.changeName}\n\nContext from the GitHub issue:\n${inputData.brief}`
+        : `/opsx:propose ${inputData.changeName}`;
+      runSkill(prompt, {
         allowedTools: AGENT_TOOLS,
         disallowedTools: NO_PUSH,
         maxTurns: 100,
@@ -265,9 +271,14 @@ export const sdlcWorkflow = createWorkflow({
   .commit();
 
 /** Initial context for a fresh run. */
-export const initialCtx = (changeName: string, cwd: string): Ctx => ({
+export const initialCtx = (
+  changeName: string,
+  cwd: string,
+  brief = "",
+): Ctx => ({
   changeName,
   cwd,
+  brief,
   trace: [],
   validatePassed: false,
   attempts: 0,

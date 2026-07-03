@@ -17,13 +17,15 @@ export function createEngine(dbPath: string): Mastra {
   return new Mastra({ storage, workflows: { sdlc: sdlcWorkflow } });
 }
 
-/** Start a new run in its own git worktree. Returns its id and the first result. */
-export async function startRun(mastra: Mastra, changeName: string) {
+/** Start a new run in its own git worktree. `brief` is optional issue context. */
+export async function startRun(mastra: Mastra, changeName: string, brief = "") {
   assertNoApiKey();
   // Dry-run stays in the repo root (hermetic); real runs get an isolated worktree.
   const cwd = isDryRun() ? repoRoot() : createWorktree(changeName, repoRoot());
   const run = await mastra.getWorkflow("sdlc").createRun();
-  const result = await run.start({ inputData: initialCtx(changeName, cwd) });
+  const result = await run.start({
+    inputData: initialCtx(changeName, cwd, brief),
+  });
   return { runId: run.runId, result };
 }
 
