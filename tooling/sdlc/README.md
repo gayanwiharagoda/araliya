@@ -54,6 +54,26 @@ What happens:
 5. `review` → `commit/PR` → **suspends at the merge gate** (waiting on the PR).
 6. `release` (release-please) → **suspends at the release gate** → `archive`.
 
+## From a GitHub issue
+
+The issue is only the **input context** — its detail seeds `/opsx:propose`, then the
+OpenSpec spec drives the rest of the run:
+
+```sh
+pnpm sdlc --issue 42
+pnpm sdlc --issue https://github.com/gayanwiharagoda/araliya/issues/42   # a link works too
+```
+
+1. `gh issue view <n|url>` → the **title** becomes the change name, the **body** becomes the brief.
+2. The sync marker `<!-- openspec:<name> -->` is written into issue #42 so `openspec:sync`
+   **adopts** #42 as the tracking issue (its checklist follows `tasks.md`) instead of creating
+   a duplicate.
+3. `propose` runs `/opsx:propose <name>` with the issue body as context; from there the spec
+   is the source of truth and the pipeline proceeds as usual.
+
+> Needs `gh` authenticated. The title-derived name is passed explicitly to `/opsx:propose`, so
+> the created change matches the marker; if you rename the change, re-point the marker.
+
 ## The 3 gates
 
 | Gate        | When                  | How to proceed                                                          |

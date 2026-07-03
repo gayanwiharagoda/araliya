@@ -1,4 +1,10 @@
 import { createEngine, startRun, resumeRun, listRuns } from "./engine.js";
+import {
+  fetchIssue,
+  issueToChangeName,
+  adoptIssue,
+  normalizeIssueRef,
+} from "./issue.js";
 
 const DB = process.env.SDLC_DB ?? ".sdlc/runs.db";
 
@@ -23,7 +29,7 @@ async function main() {
 
   if (!cmd) {
     console.error(
-      'usage: sdlc "<description>" | sdlc resume <id> [--approve|--reject] | sdlc ls',
+      "usage: sdlc <change-name> | sdlc --issue <n> | sdlc resume <id> [--approve|--reject] | sdlc ls",
     );
     process.exit(1);
   }
@@ -31,6 +37,20 @@ async function main() {
   if (cmd === "ls") {
     const runs = await listRuns(mastra);
     console.log(JSON.stringify(runs, null, 2));
+    return;
+  }
+
+  // Issue-driven: pull the detail from the issue (number or URL), let the spec drive it.
+  if (cmd === "--issue" || cmd === "issue") {
+    const ref = normalizeIssueRef(rest[0] ?? "");
+    const issue = fetchIssue(ref);
+    const changeName = issueToChangeName(issue.title);
+    adoptIssue(ref, changeName); // seed the marker so `openspec:sync` adopts this issue
+    console.log(
+      `issue #${issue.number} "${issue.title}" → change "${changeName}"`,
+    );
+    const { runId, result } = await startRun(mastra, changeName, issue.body);
+    printResult(runId, result);
     return;
   }
 
@@ -43,7 +63,7 @@ async function main() {
     return;
   }
 
-  // Anything else is treated as a change description → start a run.
+  // Anything else is treated as a (kebab-case) change name → start a run.
   const { runId, result } = await startRun(mastra, cmd);
   printResult(runId, result);
 }
