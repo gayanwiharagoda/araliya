@@ -1,19 +1,23 @@
 import { z } from "zod";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
-import { runShell, repoRoot, isDryRun, runGated } from "./shell.js";
+import { runShell, isDryRun, runGated } from "./shell.js";
+import { runSkill } from "./agent.js";
+import { allTasksChecked } from "./artifacts.js";
 
 /**
  * SDLC stage graph (ADR 0010). Every stage appends its id to `trace` — the proof
  * of a deterministic control plane: a given input yields the same ordered trace,
  * and a replayed run reaches the same terminal trace.
  *
- * Group 2 wires the deterministic stages (sync/validate/release/archive) to real
- * tooling, gating on exit codes. The agent stages (propose/build/review/commit-pr)
- * stay no-op pass-throughs until groups 3–4. `SDLC_DRY_RUN=1` skips subprocess
- * execution so the control-plane tests stay hermetic and token-free.
+ * Deterministic stages (sync/validate/release/archive) shell real tooling and gate
+ * on exit codes. `build` is a thin agent over the `/opsx:apply` skill (subscription);
+ * propose/review/commit-pr stay no-op until group 4. `SDLC_DRY_RUN=1` skips all
+ * subprocess/agent execution so the control-plane tests stay hermetic and token-free.
  */
 export const Ctx = z.object({
   changeName: z.string(),
+  // Working directory for this run — the run's git worktree, or repo root in dry-run.
+  cwd: z.string(),
   trace: z.array(z.string()),
   validatePassed: z.boolean(),
   attempts: z.number(),
@@ -65,7 +69,7 @@ const shellStage = (id: string, cmd: (ctx: Ctx) => string) =>
     inputSchema: Ctx,
     outputSchema: Ctx,
     execute: async ({ inputData }) => {
-      if (!isDryRun()) runGated(id, cmd(inputData));
+      if (!isDryRun()) runGated(id, cmd(inputData), inputData.cwd);
       return { ...inputData, trace: [...inputData.trace, id] };
     },
   });
@@ -83,27 +87,76 @@ const build = createStep({
   id: "build",
   inputSchema: Ctx,
   outputSchema: Ctx,
-  execute: async ({ inputData }) => ({
-    ...inputData,
-    trace: [...inputData.trace, "build"],
-    attempts: inputData.attempts + 1,
-  }),
+  // Thin agent: delegate to the /opsx:apply skill (subscription-billed). We ignore
+  // its self-report — success is decided by `validate` below, not the model.
+  execute: async ({ inputData }) => {
+    if (!isDryRun()) {
+      runSkill(`/opsx:apply ${inputData.changeName}`, {
+        allowedTools: [
+          "Read",
+          "Edit",
+          "Write",
+          "Glob",
+          "Grep",
+          "Bash",
+          "Skill",
+          "TodoWrite",
+        ],
+        disallowedTools: ["Bash(git push:*)", "Bash(gh:*)"], // build must not push
+        maxTurns: 200,
+        cwd: inputData.cwd,
+      });
+    }
+    return {
+      ...inputData,
+      trace: [...inputData.trace, "build"],
+      attempts: inputData.attempts + 1,
+    };
+  },
 });
 
 const validate = createStep({
   id: "validate",
   inputSchema: Ctx,
   outputSchema: Ctx,
-  // Exit code of `pnpm validate` drives the branch signal; the dountil loop retries
-  // build↔validate. ponytail: after 3 failed attempts the loop currently proceeds;
-  // task 3.6 changes that to suspend for a human with the accumulated failure log.
-  execute: async ({ inputData }) => ({
-    ...inputData,
-    trace: [...inputData.trace, "validate"],
-    validatePassed: isDryRun()
+  // Artifacts, not self-report: build is done only when every tasks.md box is
+  // checked AND `pnpm validate` exits 0. This is the branch signal for the loop.
+  execute: async ({ inputData }) => {
+    const passed = isDryRun()
       ? true
-      : runShell("pnpm validate", repoRoot()).code === 0,
-  }),
+      : allTasksChecked(inputData.changeName, inputData.cwd) &&
+        runShell("pnpm validate", inputData.cwd).code === 0;
+    return {
+      ...inputData,
+      trace: [...inputData.trace, "validate"],
+      validatePassed: passed,
+    };
+  },
+});
+
+/**
+ * Escalation gate (task 3.6): if validate still fails after the retry budget,
+ * suspend with the failure context for a human. Distinct from the 3 approval gates.
+ */
+const buildResult = createStep({
+  id: "build-result",
+  inputSchema: Ctx,
+  outputSchema: Ctx,
+  resumeSchema: z.object({ proceed: z.boolean() }),
+  suspendSchema: z.object({ reason: z.string(), attempts: z.number() }),
+  execute: async ({ inputData, resumeData, suspend }) => {
+    if (inputData.validatePassed)
+      return { ...inputData, trace: [...inputData.trace, "build-result"] };
+    if (!resumeData)
+      return await suspend({
+        reason: "validate failed after 3 build attempts",
+        attempts: inputData.attempts,
+      });
+    return {
+      ...inputData,
+      trace: [...inputData.trace, "build-result:override"],
+    };
+  },
 });
 
 /** The build↔validate retry edge: repeat until validate passes or 3 attempts. */
@@ -129,6 +182,7 @@ export const sdlcWorkflow = createWorkflow({
     async ({ inputData }) =>
       inputData.validatePassed || inputData.attempts >= 3,
   )
+  .then(buildResult)
   .then(noop("review"))
   .then(noop("commit-pr"))
   .then(gate("merge-gate"))
@@ -138,8 +192,9 @@ export const sdlcWorkflow = createWorkflow({
   .commit();
 
 /** Initial context for a fresh run. */
-export const initialCtx = (changeName: string): Ctx => ({
+export const initialCtx = (changeName: string, cwd: string): Ctx => ({
   changeName,
+  cwd,
   trace: [],
   validatePassed: false,
   attempts: 0,

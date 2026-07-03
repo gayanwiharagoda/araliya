@@ -18,13 +18,13 @@
 
 ## 3. First agent stage — build (Claude subscription)
 
-- [ ] 3.1 Add Claude-Code integration (`@mastra/claude` or `ai-sdk-provider-claude-code`); pick per design Open Question
-- [ ] 3.2 Fail-fast guard: error if `ANTHROPIC_API_KEY` is set in the orchestrator env
-- [ ] 3.3 Implement worktree isolation: one run = one git worktree/branch
-- [ ] 3.4 `build` stage invokes `/opsx:apply` via Agent SDK with scoped `allowedTools` + turn/time cap
-- [ ] 3.5 Artifact success contract: complete only when all `tasks.md` boxes checked AND `pnpm validate` exits 0
-- [ ] 3.6 Bounded build↔validate retry (≤3×, feed failure output back), then suspend with accumulated log
-- [ ] 3.7 **Verify:** a trivial change runs build→validate green on subscription (confirm billing lands on subscription, not API); an unchecked-`tasks.md` case is not marked complete
+- [x] 3.1 Claude-Code integration via thin `runSkill` (`claude -p`, subscription); chose subprocess over `@mastra/claude`/provider — no new deps, no API key
+- [x] 3.2 Fail-fast guard: `assertNoApiKey()` errors if `ANTHROPIC_API_KEY` is set (checked on run start + inside `runSkill`)
+- [x] 3.3 Worktree isolation: `createWorktree` — one run = one worktree/branch under gitignored `.sdlc/`
+- [x] 3.4 `build` stage invokes `/opsx:apply` via `runSkill` with scoped `allowedTools`/`disallowedTools` (no push) + `maxTurns`
+- [x] 3.5 Artifact success contract: `allTasksChecked` (tasks.md) AND `pnpm validate` exit 0 drive the branch signal — never the agent's self-report
+- [x] 3.6 Bounded build↔validate retry (≤3×), then `build-result` suspends for a human with the failure context
+- [ ] 3.7 **Verify (LIVE — needs your subscription):** run a trivial change build→validate green, confirm billing lands on subscription not API. (Hermetic parts done: unchecked-`tasks.md` → not complete; API-key guard; arg construction; worktree; dry-run e2e.)
 
 ## 4. Remaining agent stages + per-stage models
 

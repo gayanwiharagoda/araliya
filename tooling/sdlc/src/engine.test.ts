@@ -16,6 +16,7 @@ const EXPECTED_TRACE = [
   "sync",
   "build",
   "validate",
+  "build-result",
   "review",
   "commit-pr",
   "merge-gate:approved",

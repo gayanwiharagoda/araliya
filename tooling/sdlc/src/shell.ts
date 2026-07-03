@@ -16,6 +16,25 @@ export function runShell(cmd: string, cwd?: string): ShellResult {
   };
 }
 
+/** Run a binary with an explicit arg array (no shell) — safe for untrusted args like prompts. */
+export function runShellArgs(
+  bin: string,
+  args: string[],
+  cwd?: string,
+): ShellResult {
+  const r = spawnSync(bin, args, {
+    shell: false,
+    encoding: "utf8",
+    cwd,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  return {
+    code: r.status ?? 1,
+    stdout: r.stdout ?? "",
+    stderr: r.stderr ?? "",
+  };
+}
+
 let cachedRoot: string | undefined;
 
 /** Repo root, so stages shell out from the right cwd regardless of pnpm's filter cwd. */
