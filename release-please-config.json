@@ -1,0 +1,10 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    "apps/web": { "release-type": "node", "component": "web" },
+    "apps/mobile": { "release-type": "node", "component": "mobile" },
+    "packages/backend": { "release-type": "node", "component": "backend" }
+  },
+  "separate-pull-requests": false,
+  "include-component-in-tag": true
+}

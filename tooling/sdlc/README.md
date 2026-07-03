@@ -1,0 +1,97 @@
+# @domus/sdlc — agentic SDLC orchestrator
+
+A local, deterministic conductor that drives a feature through the whole SDLC:
+**propose → build → validate → review → commit/PR → release → archive**, with 3 human
+gates. Agent stages are thin wrappers over your existing `/opsx:*` skills, billed to your
+Claude **subscription** (no API key). Design: [ADR 0010](../../docs/adr/0010-agentic-sdlc-orchestrator.md).
+
+## Prerequisites
+
+- **Node ≥ 20.19** (the repo's husky hooks and Vitest 4 require it — Node 18 breaks them).
+- **`claude` CLI logged in** to your Pro/Max subscription.
+- **`ANTHROPIC_API_KEY` unset** — the orchestrator hard-fails if it's set, so agent runs
+  can't silently drift onto API billing.
+- `gh` authenticated (only needed for the live commit/PR + release stages).
+
+## Try it first with a dry run (no tokens, no side effects)
+
+`SDLC_DRY_RUN=1` skips every subprocess/agent/model call — it exercises only the control
+plane (ordering, gates, suspend/resume), so it's safe and instant:
+
+```sh
+export SDLC_DRY_RUN=1
+pnpm sdlc "demo-feature"                 # → prints a run id, suspends at the plan gate
+pnpm sdlc resume <run-id> --approve      # → plan approved, suspends at the merge gate
+pnpm sdlc resume <run-id> --approve      # → merge approved, suspends at the release gate
+pnpm sdlc resume <run-id> --approve      # → success
+pnpm sdlc ls                             # list runs
+```
+
+## Running it for real to build a feature
+
+> **Recommended today:** create the change first, then let the orchestrator drive the rest.
+> This sidesteps a current rough edge (the CLI takes one kebab-case name, not a free-text
+> description — see _Known limitations_).
+
+```sh
+# 1. Create the OpenSpec change (interactive — writes proposal/specs/tasks.md)
+/opsx:propose add-dark-mode
+
+# 2. Drive the change through the pipeline (real run — unset dry-run!)
+unset SDLC_DRY_RUN
+pnpm sdlc add-dark-mode
+```
+
+What happens:
+
+1. A git **worktree** `.sdlc/worktrees/add-dark-mode` on branch `sdlc/add-dark-mode` is created
+   (one run = one change = one worktree).
+2. `propose` (skipped if already proposed) → **suspends at the plan gate**.
+3. You review the proposal, then `pnpm sdlc resume <run-id> --approve` (or `--reject`).
+4. `sync` → `build` (`/opsx:apply` on your subscription) ↔ `validate` (`pnpm validate`),
+   retrying up to 3× — build is "done" only when **every tasks.md box is checked AND
+   `pnpm validate` exits 0**, never because the agent said so.
+5. `review` → `commit/PR` → **suspends at the merge gate** (waiting on the PR).
+6. `release` (release-please) → **suspends at the release gate** → `archive`.
+
+## The 3 gates
+
+| Gate        | When                  | How to proceed                                                          |
+| ----------- | --------------------- | ----------------------------------------------------------------------- |
+| **plan**    | after `propose`       | `pnpm sdlc resume <id> --approve` / `--reject`                          |
+| **merge**   | the feature PR        | approve/reject via CLI (auto-resume-on-merge is Group 5, not yet built) |
+| **release** | the release-please PR | approve/reject via CLI                                                  |
+
+## Per-stage models (mix and match)
+
+Agentic file-editing stages (`propose`, `build`) are pinned to Claude. The cheap reasoning
+stages are swappable via `SDLC_MODEL_<STAGE>`:
+
+```sh
+SDLC_MODEL_REVIEW=ollama/llama3        pnpm sdlc add-dark-mode   # local, no key
+SDLC_MODEL_COMMIT_PR=openai/gpt-4o-mini pnpm sdlc add-dark-mode   # needs OPENAI_API_KEY
+```
+
+Provider prefixes: `claude` (subscription CLI), `ollama/*` (local HTTP, no key),
+`openai/*` (needs `OPENAI_API_KEY` — a different vendor).
+
+## Environment variables
+
+| Var                             | Purpose                                            | Default         |
+| ------------------------------- | -------------------------------------------------- | --------------- |
+| `SDLC_DRY_RUN`                  | `1` = skip all real execution (control-plane only) | off             |
+| `SDLC_DB`                       | LibSQL run-state file                              | `.sdlc/runs.db` |
+| `SDLC_MODEL_<STAGE>`            | per-stage model override (`REVIEW`, `COMMIT_PR`)   | `claude`        |
+| `OPENAI_API_KEY`                | required only for `openai/*` models                | —               |
+| `GITHUB_TOKEN`, `SDLC_REPO_URL` | required only for the live release stage           | —               |
+| `ANTHROPIC_API_KEY`             | **must be unset** (fail-fast guard)                | —               |
+
+## Known limitations (work in progress)
+
+- **Change name must be kebab-case.** The CLI's argument becomes the change name and the
+  git branch/worktree; free-text with spaces will break a live run. Pass a name like
+  `add-dark-mode`, or pre-create with `/opsx:propose` (recommended).
+- **Merge/release gates are manual** (approve via CLI). Auto-resume by polling `gh pr view`
+  until merged is **Group 5**, not yet implemented.
+- **Live `gh`/release-please** need `GITHUB_TOKEN`; those stages are wired and exit-code-gated
+  but haven't been run end-to-end against GitHub yet.

@@ -21,3 +21,4 @@ An ADR captures one significant architectural decision: its context, the choice,
 | [0007](0007-typescript-strict-mode.md)                   | TypeScript strict mode                   | Accepted |
 | [0008](0008-deterministic-validation-gates.md)           | Deterministic validation gates           | Accepted |
 | [0009](0009-automated-release-and-commit-conventions.md) | Automated release and commit conventions | Proposed |
+| [0010](0010-agentic-sdlc-orchestrator.md)                | Agentic SDLC orchestrator (Mastra)       | Proposed |

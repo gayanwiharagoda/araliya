@@ -16,18 +16,22 @@
     "typecheck": "turbo typecheck",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "sdlc": "pnpm --filter @domus/sdlc sdlc",
     "openspec:sync": "node scripts/openspec-sync.mjs",
     "openspec:sync:test": "node --test scripts/*.test.mjs",
     "validate": "turbo typecheck lint && prettier --check . && turbo test",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.0",
+    "@commitlint/config-conventional": "^21.2.0",
     "@eslint/js": "^9",
     "archunit": "^2.3.0",
     "eslint": "^9",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.8",
     "prettier": "^3.8.4",
+    "release-please": "^17.10.1",
     "turbo": "^2.10.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.62.0"
