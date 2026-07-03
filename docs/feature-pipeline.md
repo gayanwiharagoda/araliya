@@ -23,6 +23,11 @@ pnpm openspec:sync   # mirror changes → GitHub issues + the board
 /opsx:archive        # when done → next sync marks it Done and closes the issue
 ```
 
+> **Automating the whole loop:** the above steps can be driven end-to-end by the local
+> **SDLC orchestrator** (`pnpm sdlc <change-name>`) — a deterministic conductor that chains
+> propose → build → validate → review → release → archive with human gates, on your Claude
+> subscription. See [`tooling/sdlc/README.md`](../tooling/sdlc/README.md) (ADR 0010).
+
 - **Status board:** the GitHub **Feature Pipeline** Project. Each card shows its repo via the
   built-in Repository field and a `repo:<name>` label.
 - **Live activity:** run `/opsx:apply` as a Claude Code **background task**.
