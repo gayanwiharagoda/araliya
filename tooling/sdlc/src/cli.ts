@@ -5,9 +5,20 @@ import {
   adoptIssue,
   normalizeIssueRef,
 } from "./issue.js";
-import { log } from "./log.js";
+import type { Ctx } from "./stages.js";
+import { fileURLToPath } from "node:url";
 
 const DB = process.env.SDLC_DB ?? ".sdlc/runs.db";
+
+/** `--auto` → run to archive; `--auto=pr` → auto up to the PR then stop at merge-gate. */
+export function parseAuto(argv: string[]): Ctx["auto"] {
+  const a = argv.find((x) => x === "--auto" || x.startsWith("--auto="));
+  if (!a) return "off";
+  const v = a === "--auto" ? "full" : a.slice("--auto=".length);
+  if (v !== "pr" && v !== "full")
+    throw new Error(`--auto expects 'pr' or 'full' (got '${v}')`);
+  return v;
+}
 
 function printResult(
   runId: string,
@@ -25,12 +36,16 @@ function printResult(
 }
 
 async function main() {
-  const [cmd, ...rest] = process.argv.slice(2);
+  const argv = process.argv.slice(2);
+  const auto = parseAuto(argv);
+  const [cmd, ...rest] = argv.filter(
+    (x) => x !== "--auto" && !x.startsWith("--auto="),
+  );
   const mastra = createEngine(DB);
 
   if (!cmd) {
     console.error(
-      "usage: sdlc <change-name> | sdlc --issue <n> | sdlc resume <id> [--approve|--reject] | sdlc ls",
+      "usage: sdlc <change-name> [--auto[=pr]] | sdlc --issue <n> [--auto[=pr]] | sdlc resume <id> [--approve|--reject] | sdlc ls",
     );
     process.exit(1);
   }
@@ -50,7 +65,12 @@ async function main() {
     console.log(
       `issue #${issue.number} "${issue.title}" → change "${changeName}"`,
     );
-    const { runId, result } = await startRun(mastra, changeName, issue.body);
+    const { runId, result } = await startRun(
+      mastra,
+      changeName,
+      issue.body,
+      auto,
+    );
     printResult(runId, result);
     return;
   }
@@ -65,11 +85,17 @@ async function main() {
   }
 
   // Anything else is treated as a (kebab-case) change name → start a run.
-  const { runId, result } = await startRun(mastra, cmd);
+  const { runId, result } = await startRun(mastra, cmd, "", auto);
   printResult(runId, result);
 }
 
-main().catch((err) => {
-  log.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
-  process.exit(1);
-});
+// Run only when invoked directly (not when imported by a test).
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    // A fatal crash must always surface — bypass the leveled logger (silent at level=none).
+    console.error(
+      err instanceof Error ? (err.stack ?? err.message) : String(err),
+    );
+    process.exit(1);
+  });
+}

@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { Mastra } from "@mastra/core";
 import { LibSQLStore } from "@mastra/libsql";
-import { sdlcWorkflow, initialCtx } from "./stages.js";
+import { sdlcWorkflow, initialCtx, type Ctx } from "./stages.js";
 import { isDryRun, repoRoot } from "./shell.js";
 import { assertNoApiKey } from "./agent.js";
 import { createWorktree } from "./worktree.js";
@@ -23,13 +23,18 @@ export function createEngine(dbPath: string): Mastra {
 }
 
 /** Start a new run in its own git worktree. `brief` is optional issue context. */
-export async function startRun(mastra: Mastra, changeName: string, brief = "") {
+export async function startRun(
+  mastra: Mastra,
+  changeName: string,
+  brief = "",
+  auto: Ctx["auto"] = "off",
+) {
   assertNoApiKey();
   // Dry-run stays in the repo root (hermetic); real runs get an isolated worktree.
   const cwd = isDryRun() ? repoRoot() : createWorktree(changeName, repoRoot());
   const run = await mastra.getWorkflow("sdlc").createRun();
   const result = await run.start({
-    inputData: initialCtx(changeName, cwd, brief),
+    inputData: initialCtx(changeName, cwd, brief, auto),
   });
   return { runId: run.runId, result };
 }

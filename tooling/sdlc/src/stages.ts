@@ -26,6 +26,9 @@ export const Ctx = z.object({
   trace: z.array(z.string()),
   validatePassed: z.boolean(),
   attempts: z.number(),
+  // Unattended mode: "off" = human gates (default), "pr" = auto up to the PR then stop at
+  // merge-gate, "full" = auto-approve every gate through archive.
+  auto: z.enum(["off", "pr", "full"]),
 });
 export type Ctx = z.infer<typeof Ctx>;
 
@@ -39,8 +42,17 @@ const extractJson = (s: string): string => s.match(/\{[\s\S]*\}/)?.[0] ?? s;
 const announce = (id: string): void => log.info(`▶ ${id}`);
 
 /**
+ * Whether this gate is auto-approved for the run's mode. `full` clears every gate;
+ * `pr` clears only the pre-build plan-gate, so the run still stops at merge-gate once
+ * the PR exists (a human reviews/merges it on GitHub).
+ */
+const autoApproves = (mode: Ctx["auto"], gateId: string): boolean =>
+  mode === "full" || (mode === "pr" && gateId === "plan-gate");
+
+/**
  * A human gate: first execution suspends; resuming with `{ approved: true }`
  * proceeds, `{ approved: false }` fails the run (stops before the next stage).
+ * In auto mode the gate skips the suspend (see `autoApproves`).
  * Groups 5 replaces the merge/release gates with `gh` PR-merge polling.
  */
 const gate = (id: string) =>
@@ -52,6 +64,8 @@ const gate = (id: string) =>
     suspendSchema: GateSuspend,
     execute: async ({ inputData, resumeData, suspend }) => {
       announce(id);
+      if (autoApproves(inputData.auto, id))
+        return { ...inputData, trace: [...inputData.trace, `${id}:auto`] };
       if (!resumeData)
         return await suspend({ gate: id, changeName: inputData.changeName });
       if (!resumeData.approved) throw new Error(`${id}: rejected`);
@@ -232,6 +246,11 @@ const buildResult = createStep({
     announce("build-result");
     if (inputData.validatePassed)
       return { ...inputData, trace: [...inputData.trace, "build-result"] };
+    // Auto mode has no human to escalate to — fail closed rather than suspend forever.
+    if (inputData.auto !== "off")
+      throw new Error(
+        `build-result: validate still failing after ${inputData.attempts} attempts (auto mode)`,
+      );
     if (!resumeData)
       return await suspend({
         reason: "validate failed after 3 build attempts",
@@ -281,6 +300,7 @@ export const initialCtx = (
   changeName: string,
   cwd: string,
   brief = "",
+  auto: Ctx["auto"] = "off",
 ): Ctx => ({
   changeName,
   cwd,
@@ -288,4 +308,5 @@ export const initialCtx = (
   trace: [],
   validatePassed: false,
   attempts: 0,
+  auto,
 });

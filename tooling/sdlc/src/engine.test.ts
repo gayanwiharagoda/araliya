@@ -65,4 +65,32 @@ describe("sdlc walking skeleton", () => {
     const rejected = await resumeRun(m, runId, false);
     expect(rejected.result.status).toBe("failed");
   });
+
+  it("--auto (full) runs to completion with no gate suspends", async () => {
+    const m = createEngine(tempDb());
+    const { result } = await startRun(m, "demo-auto", "", "full");
+    expect(result.status).toBe("success");
+    expect(result.status === "success" && result.result.trace).toEqual([
+      "propose",
+      "plan-gate:auto",
+      "sync",
+      "build",
+      "validate",
+      "build-result",
+      "review",
+      "commit-pr",
+      "merge-gate:auto",
+      "release",
+      "release-gate:auto",
+      "archive",
+    ]);
+  });
+
+  it("--auto=pr auto-clears the plan gate but still stops at merge-gate", async () => {
+    const m = createEngine(tempDb());
+    const { result } = await startRun(m, "demo-pr", "", "pr");
+    const r = result as { status: string; suspended?: string[][] };
+    expect(r.status).toBe("suspended");
+    expect(r.suspended?.[0]?.join("/")).toBe("merge-gate"); // past plan-gate, paused at the PR
+  });
 });
