@@ -68,6 +68,61 @@ export interface AgentResult {
 const oneLine = (s: string): string => s.replace(/\s+/g, " ").trim();
 const trunc = (s: string, n = 200): string =>
   s.length > n ? s.slice(0, n - 1) + "…" : s;
+/** Last two path segments — enough context without the long absolute prefix. */
+const shortPath = (p: string): string => p.split("/").slice(-2).join("/");
+
+/** A meaningful one-liner for a tool call — the key arg, not the whole input blob. */
+function toolSummary(name = "?", input: Record<string, unknown> = {}): string {
+  const s = (k: string): string =>
+    typeof input[k] === "string" ? (input[k] as string) : "";
+  switch (name) {
+    case "Read":
+    case "Write":
+    case "Edit":
+    case "NotebookEdit": {
+      const p = s("file_path") || s("notebook_path");
+      return p ? `${name} ${shortPath(p)}` : name;
+    }
+    case "Bash":
+      return `Bash ${trunc(oneLine(s("command")), 80)}`;
+    case "Grep":
+      return `Grep ${s("pattern")}${input.path ? ` in ${shortPath(s("path"))}` : ""}`;
+    case "Glob":
+      return `Glob ${s("pattern")}`;
+    case "Skill":
+      return `Skill ${s("command") || s("name")}`.trim();
+    case "Task":
+      return `Task ${s("description") || s("subagent_type")}`.trim();
+    case "TodoWrite":
+      return `TodoWrite (${Array.isArray(input.todos) ? input.todos.length : "?"} todos)`;
+    default:
+      return `${name} ${trunc(oneLine(JSON.stringify(input)), 60)}`.trim();
+  }
+}
+
+/** tool_result content is a string or an array of content blocks — pull out the text. */
+function resultText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content))
+    return content
+      .map((c) =>
+        c && typeof c === "object" && "text" in c
+          ? String((c as { text: unknown }).text)
+          : "",
+      )
+      .join("\n");
+  return content == null ? "" : JSON.stringify(content);
+}
+
+/** Summarize a tool result: show short output/errors inline, collapse big dumps to a count. */
+function resultSummary(content: unknown, isError?: boolean): string {
+  const body = resultText(content).trim();
+  if (isError) return `⚠️  ${trunc(oneLine(body), 120)}`;
+  const lines = body ? body.split("\n").length : 0;
+  return lines <= 2 && body.length <= 120
+    ? `↳ ${oneLine(body) || "ok"}`
+    : `↳ ${lines} lines`;
+}
 
 /**
  * Turn one `claude` stream-json event into a readable one-liner (or null to drop it).
@@ -103,7 +158,7 @@ export function formatEvent(e: {
           return [`💬 ${trunc(oneLine(c.text))}`];
         if (c.type === "tool_use")
           return [
-            `🔧 ${c.name} ${trunc(oneLine(JSON.stringify(c.input ?? {})), 100)}`,
+            `🔧 ${toolSummary(c.name, c.input as Record<string, unknown>)}`,
           ];
         return [];
       });
@@ -114,9 +169,7 @@ export function formatEvent(e: {
         (c) => c.type === "tool_result",
       );
       if (!r) return null;
-      const body =
-        typeof r.content === "string" ? r.content : JSON.stringify(r.content);
-      return `   ${r.is_error ? "⚠️  " : "↳ "}${trunc(oneLine(body), 120)}`;
+      return `   ${resultSummary(r.content, r.is_error)}`;
     }
     case "result": {
       const turns = e.num_turns ?? "?";
