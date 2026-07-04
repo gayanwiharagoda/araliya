@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { buildClaudeArgs, assertNoApiKey, runSkill } from "./agent.js";
+import {
+  buildClaudeArgs,
+  assertNoApiKey,
+  runSkill,
+  formatEvent,
+} from "./agent.js";
 
 beforeEach(() => {
   delete process.env.ANTHROPIC_API_KEY;
@@ -42,10 +47,49 @@ describe("thin agent layer", () => {
     expect(() => assertNoApiKey()).not.toThrow();
   });
 
-  it("dry-run short-circuits without spending budget", () => {
+  it("dry-run short-circuits without spending budget", async () => {
     process.env.SDLC_DRY_RUN = "1";
-    const r = runSkill("/opsx:apply demo");
+    const r = await runSkill("/opsx:apply demo");
     expect(r.code).toBe(0);
     expect(r.json).toEqual({ dryRun: true });
+  });
+});
+
+describe("stream-json formatter", () => {
+  it("renders each event kind as a readable line", () => {
+    expect(
+      formatEvent({
+        type: "system",
+        subtype: "init",
+        model: "haiku",
+        tools: [1, 2],
+      }),
+    ).toContain("haiku");
+    expect(
+      formatEvent({
+        type: "assistant",
+        message: {
+          content: [
+            { type: "tool_use", name: "Bash", input: { command: "ls" } },
+          ],
+        },
+      }),
+    ).toContain("Bash");
+    expect(
+      formatEvent({
+        type: "result",
+        subtype: "success",
+        num_turns: 3,
+        duration_ms: 1200,
+      }),
+    ).toMatch(/done/);
+    expect(
+      formatEvent({ type: "result", is_error: true, num_turns: 2 }),
+    ).toMatch(/failed/);
+  });
+
+  it("drops events with nothing to show", () => {
+    expect(formatEvent({ type: "system", subtype: "other" })).toBeNull();
+    expect(formatEvent({ type: "unknown" })).toBeNull();
   });
 });

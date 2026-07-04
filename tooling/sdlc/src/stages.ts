@@ -4,6 +4,7 @@ import { runShell, isDryRun, runGated } from "./shell.js";
 import { runSkill } from "./agent.js";
 import { runModel, stageModel } from "./model.js";
 import { allTasksChecked } from "./artifacts.js";
+import { log } from "./log.js";
 
 /**
  * SDLC stage graph (ADR 0010). Every stage appends its id to `trace` — the proof
@@ -34,8 +35,8 @@ const GateSuspend = z.object({ gate: z.string(), changeName: z.string() });
 /** First JSON object in a model's text response (models often wrap it in prose). */
 const extractJson = (s: string): string => s.match(/\{[\s\S]*\}/)?.[0] ?? s;
 
-/** Announce a stage as it runs — the run's live progress trail (stderr, off captured stdout). */
-const announce = (id: string): void => console.error(`\n▶ ${id}`);
+/** Announce a stage as it runs — the run's live progress trail. */
+const announce = (id: string): void => log.info(`▶ ${id}`);
 
 /**
  * A human gate: first execution suspends; resuming with `{ approved: true }`
@@ -100,7 +101,7 @@ const propose = createStep({
       const prompt = inputData.brief.trim()
         ? `/opsx:propose ${inputData.changeName}\n\nContext from the GitHub issue:\n${inputData.brief}`
         : `/opsx:propose ${inputData.changeName}`;
-      runSkill(prompt, {
+      await runSkill(prompt, {
         agent: "proposer",
         disallowedTools: NO_PUSH,
         maxTurns: 100,
@@ -182,7 +183,7 @@ const build = createStep({
   execute: async ({ inputData }) => {
     announce("build");
     if (!isDryRun()) {
-      runSkill(`/opsx:apply ${inputData.changeName}`, {
+      await runSkill(`/opsx:apply ${inputData.changeName}`, {
         agent: "builder",
         disallowedTools: NO_PUSH, // build must not push
         maxTurns: 200,

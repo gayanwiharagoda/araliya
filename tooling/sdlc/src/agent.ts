@@ -1,5 +1,7 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 import { repoRoot, isDryRun } from "./shell.js";
+import { log } from "./log.js";
 
 /**
  * Thin agent layer. Agent stages own NO logic — each just invokes an existing
@@ -63,20 +65,106 @@ export interface AgentResult {
   raw: string;
 }
 
+const oneLine = (s: string): string => s.replace(/\s+/g, " ").trim();
+const trunc = (s: string, n = 200): string =>
+  s.length > n ? s.slice(0, n - 1) + "…" : s;
+
 /**
- * Invoke a skill. Returns the raw result — callers decide success from
+ * Turn one `claude` stream-json event into a readable one-liner (or null to drop it).
+ * Keeps the live agent feed legible instead of dumping raw NDJSON. Exported for testing.
+ */
+export function formatEvent(e: {
+  type?: string;
+  subtype?: string;
+  model?: string;
+  tools?: unknown[];
+  is_error?: boolean;
+  num_turns?: number;
+  duration_ms?: number;
+  message?: {
+    content?: {
+      type?: string;
+      text?: string;
+      name?: string;
+      input?: unknown;
+      content?: unknown;
+      is_error?: boolean;
+    }[];
+  };
+}): string | null {
+  switch (e.type) {
+    case "system":
+      return e.subtype === "init"
+        ? `⚙  ${e.model ?? "?"} · ${e.tools?.length ?? 0} tools`
+        : null;
+    case "assistant": {
+      const lines = (e.message?.content ?? []).flatMap((c) => {
+        if (c.type === "text" && c.text?.trim())
+          return [`💬 ${trunc(oneLine(c.text))}`];
+        if (c.type === "tool_use")
+          return [
+            `🔧 ${c.name} ${trunc(oneLine(JSON.stringify(c.input ?? {})), 100)}`,
+          ];
+        return [];
+      });
+      return lines.length ? lines.join("\n") : null;
+    }
+    case "user": {
+      const r = (e.message?.content ?? []).find(
+        (c) => c.type === "tool_result",
+      );
+      if (!r) return null;
+      const body =
+        typeof r.content === "string" ? r.content : JSON.stringify(r.content);
+      return `   ${r.is_error ? "⚠️  " : "↳ "}${trunc(oneLine(body), 120)}`;
+    }
+    case "result": {
+      const turns = e.num_turns ?? "?";
+      if (e.is_error || e.subtype?.startsWith("error"))
+        return `✗ failed (${turns} turns${e.subtype ? `, ${e.subtype}` : ""})`;
+      return `✓ done (${turns} turns, ${Math.round((e.duration_ms ?? 0) / 1000)}s)`;
+    }
+    default:
+      return null;
+  }
+}
+
+/** Spawn `claude`, formatting its stream-json to readable lines as they arrive. */
+function streamClaude(args: string[], cwd: string): Promise<number> {
+  return new Promise((resolve) => {
+    const child = spawn("claude", args, { cwd });
+    createInterface({ input: child.stdout }).on("line", (line) => {
+      if (!line.trim()) return;
+      let evt;
+      try {
+        evt = JSON.parse(line);
+      } catch {
+        return; // non-JSON noise (e.g. a stray log line) — skip
+      }
+      // Pretty line at info; the raw event only surfaces at SDLC_LOG_LEVEL=debug.
+      const out = formatEvent(evt);
+      if (out) log.info(out);
+      else log.debug(line);
+    });
+    child.stderr.on("data", (d: Buffer) => log.error(d.toString().trimEnd()));
+    child.on("close", (code) => resolve(code ?? 1));
+  });
+}
+
+/**
+ * Invoke a skill. Returns the (empty) result — callers decide success from
  * deterministic artifacts (tasks.md checkoff, `pnpm validate`, `gh pr` state),
  * NEVER from this return value. Dry-run short-circuits so no budget is spent in tests.
  */
-export function runSkill(prompt: string, opts: SkillOptions = {}): AgentResult {
+export async function runSkill(
+  prompt: string,
+  opts: SkillOptions = {},
+): Promise<AgentResult> {
   assertNoApiKey();
   if (isDryRun()) return { code: 0, json: { dryRun: true }, raw: "" };
-  // Inherit stdio so the streamed NDJSON events land on the terminal live. Callers
-  // decide success from artifacts (tasks.md, `pnpm validate`), so we discard the
-  // payload. ponytail: raw stream-json is noisy — a pretty-printer is the upgrade path.
-  const { status } = spawnSync("claude", buildClaudeArgs(prompt, opts), {
-    stdio: "inherit",
-    cwd: opts.cwd ?? repoRoot(),
-  });
-  return { code: status ?? 1, json: undefined, raw: "" };
+  const code = await streamClaude(
+    buildClaudeArgs(prompt, opts),
+    opts.cwd ?? repoRoot(),
+  );
+  return { code, json: undefined, raw: "" };
 }

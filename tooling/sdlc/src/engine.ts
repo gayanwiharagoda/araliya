@@ -6,6 +6,7 @@ import { sdlcWorkflow, initialCtx } from "./stages.js";
 import { isDryRun, repoRoot } from "./shell.js";
 import { assertNoApiKey } from "./agent.js";
 import { createWorktree } from "./worktree.js";
+import { log } from "./log.js";
 
 /**
  * Build an engine bound to a LibSQL file. A new engine over the same file is a
@@ -14,7 +15,11 @@ import { createWorktree } from "./worktree.js";
 export function createEngine(dbPath: string): Mastra {
   mkdirSync(dirname(dbPath), { recursive: true });
   const storage = new LibSQLStore({ id: "sdlc", url: `file:${dbPath}` });
-  return new Mastra({ storage, workflows: { sdlc: sdlcWorkflow } });
+  return new Mastra({
+    storage,
+    workflows: { sdlc: sdlcWorkflow },
+    logger: log,
+  });
 }
 
 /** Start a new run in its own git worktree. `brief` is optional issue context. */
