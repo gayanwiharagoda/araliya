@@ -82,6 +82,25 @@ pnpm sdlc --issue https://github.com/gayanwiharagoda/araliya/issues/42   # a lin
 | **merge**   | the feature PR        | approve/reject via CLI (auto-resume-on-merge is Group 5, not yet built) |
 | **release** | the release-please PR | approve/reject via CLI                                                  |
 
+## Unattended runs (`--auto`)
+
+By default a run stops at each of the 3 gates for a human. `--auto` skips gates:
+
+```sh
+pnpm sdlc add-dark-mode --auto      # full: propose → … → release → archive, no stops
+pnpm sdlc add-dark-mode --auto=pr   # unattended up to the PR, then stop at the merge gate
+pnpm sdlc --issue 42 --auto         # works with issue-driven runs too
+```
+
+- `--auto=pr` auto-clears the **plan** gate and runs through **commit/PR**, then suspends at
+  the **merge** gate so a human reviews and merges the PR on GitHub.
+- `--auto` (full) auto-clears **all** gates through `archive`. It fires `release-please` and
+  `archive` unattended and creates — but never merges — the feature PR (merge stays a GitHub
+  action). Since nothing pauses, ensure `claude` and (for `release`) `GITHUB_TOKEN` /
+  `SDLC_REPO_URL` are set first.
+- In `--auto`/`--auto=pr`, if `validate` still fails after the 3-attempt budget the run
+  **fails** (no human to escalate to) instead of suspending.
+
 ## Per-stage agents & models
 
 Each agentic stage runs as a subagent defined in [`.agents/agents/`](../../.agents/agents/)
