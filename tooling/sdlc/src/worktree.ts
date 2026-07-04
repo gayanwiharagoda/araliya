@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { runShell } from "./shell.js";
 
 /**
@@ -12,6 +13,9 @@ export function createWorktree(changeName: string, root: string): string {
   if (!existing.includes(dir)) {
     // -B resets the branch if it already exists, so re-runs are idempotent.
     runShell(`git worktree add -B ${branch} ${JSON.stringify(dir)}`, root);
+    // A fresh worktree has no node_modules — install so validate/build can run
+    // at all (otherwise `pnpm validate` fails with "turbo not found").
+    if (existsSync(join(dir, "package.json"))) runShell("pnpm install", dir);
   }
   return dir;
 }
