@@ -1,4 +1,11 @@
-import { createEngine, startRun, resumeRun, listRuns } from "./engine.js";
+import {
+  createEngine,
+  startRun,
+  resumeRun,
+  runInteractive,
+  listRuns,
+  type GatePrompt,
+} from "./engine.js";
 import {
   fetchIssue,
   issueToChangeName,
@@ -7,8 +14,51 @@ import {
 } from "./issue.js";
 import type { Ctx } from "./stages.js";
 import { fileURLToPath } from "node:url";
+import { createInterface } from "node:readline";
 
 const DB = process.env.SDLC_DB ?? ".sdlc/runs.db";
+
+// One stdin reader for the session, with a line queue so buffered/piped answers aren't
+// dropped between prompts (readline.question loses lines that arrive before the next call).
+let rl: ReturnType<typeof createInterface> | undefined;
+const lineQueue: string[] = [];
+const lineWaiters: ((line: string) => void)[] = [];
+
+function readLine(): Promise<string> {
+  if (!rl) {
+    rl = createInterface({ input: process.stdin });
+    rl.on("line", (l) => {
+      const waiter = lineWaiters.shift();
+      if (waiter) waiter(l);
+      else lineQueue.push(l);
+    });
+  }
+  const queued = lineQueue.shift();
+  if (queued !== undefined) return Promise.resolve(queued);
+  return new Promise((resolve) => lineWaiters.push(resolve));
+}
+
+/** Print a prompt and read a single y/N answer. */
+async function confirm(question: string): Promise<boolean> {
+  process.stdout.write(question);
+  return /^y(es)?$/i.test((await readLine()).trim());
+}
+
+/** Close the shared reader so the process can exit. */
+function closePrompts(): void {
+  rl?.close();
+  rl = undefined;
+}
+
+/** Print the "what happened / what to verify" summary and prompt to continue. */
+async function askGate(p: GatePrompt): Promise<boolean> {
+  console.log(`\n── ${p.gate ?? "build-result (validate failed)"} ──`);
+  if (p.changeName) console.log(`  change:  ${p.changeName}`);
+  if (p.done?.length) console.log(`  done:    ${p.done.join(" → ")}`);
+  if (p.reason) console.log(`  problem: ${p.reason} (attempt ${p.attempts})`);
+  console.log(`  verify:  ${p.verify ?? "review the run so far"}`);
+  return confirm(`  approve & continue? [y/N] `);
+}
 
 /** `--auto` → run to archive; `--auto=pr` → auto up to the PR then stop at merge-gate. */
 export function parseAuto(argv: string[]): Ctx["auto"] {
@@ -35,17 +85,25 @@ function printResult(
   }
 }
 
-async function main() {
+async function dispatch() {
   const argv = process.argv.slice(2);
   const auto = parseAuto(argv);
+  const interactive = argv.includes("-i") || argv.includes("--interactive");
+  const flags = new Set(["--auto", "-i", "--interactive"]);
   const [cmd, ...rest] = argv.filter(
-    (x) => x !== "--auto" && !x.startsWith("--auto="),
+    (x) => !flags.has(x) && !x.startsWith("--auto="),
   );
   const mastra = createEngine(DB);
 
+  // Interactive: drive the run in this terminal, prompting at each gate (no `resume` command).
+  const begin = (changeName: string, brief: string) =>
+    interactive
+      ? runInteractive(mastra, changeName, brief, auto, askGate)
+      : startRun(mastra, changeName, brief, auto);
+
   if (!cmd) {
     console.error(
-      "usage: sdlc <change-name> [--auto[=pr]] | sdlc --issue <n> [--auto[=pr]] | sdlc resume <id> [--approve|--reject] | sdlc ls",
+      "usage: sdlc <change-name> [--auto[=pr]] [-i] | sdlc --issue <n> [--auto[=pr]] [-i] | sdlc resume <id> [--approve|--reject] | sdlc ls",
     );
     process.exit(1);
   }
@@ -65,12 +123,7 @@ async function main() {
     console.log(
       `issue #${issue.number} "${issue.title}" → change "${changeName}"`,
     );
-    const { runId, result } = await startRun(
-      mastra,
-      changeName,
-      issue.body,
-      auto,
-    );
+    const { runId, result } = await begin(changeName, issue.body);
     printResult(runId, result);
     return;
   }
@@ -85,8 +138,16 @@ async function main() {
   }
 
   // Anything else is treated as a (kebab-case) change name → start a run.
-  const { runId, result } = await startRun(mastra, cmd, "", auto);
+  const { runId, result } = await begin(cmd, "");
   printResult(runId, result);
+}
+
+async function main() {
+  try {
+    await dispatch();
+  } finally {
+    closePrompts(); // release stdin so the process can exit
+  }
 }
 
 // Run only when invoked directly (not when imported by a test).

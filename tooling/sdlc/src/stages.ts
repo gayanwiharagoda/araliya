@@ -33,7 +33,22 @@ export const Ctx = z.object({
 export type Ctx = z.infer<typeof Ctx>;
 
 const GateResume = z.object({ approved: z.boolean() });
-const GateSuspend = z.object({ gate: z.string(), changeName: z.string() });
+const GateSuspend = z.object({
+  gate: z.string(),
+  changeName: z.string(),
+  // Summary shown to a human at the gate: stages done so far + what to check.
+  done: z.array(z.string()),
+  verify: z.string(),
+});
+
+/** What a human should check at each gate — shown by interactive mode. */
+const verifyHint = (gateId: string): string =>
+  ({
+    "plan-gate":
+      "Review the proposal, specs, and tasks.md before the build starts.",
+    "merge-gate": "Review the committed diff / the PR before it merges.",
+    "release-gate": "Review the release-please PR before releasing.",
+  })[gateId] ?? "Review before continuing.";
 
 /** First JSON object in a model's text response (models often wrap it in prose). */
 const extractJson = (s: string): string => s.match(/\{[\s\S]*\}/)?.[0] ?? s;
@@ -67,7 +82,12 @@ const gate = (id: string) =>
       if (autoApproves(inputData.auto, id))
         return { ...inputData, trace: [...inputData.trace, `${id}:auto`] };
       if (!resumeData)
-        return await suspend({ gate: id, changeName: inputData.changeName });
+        return await suspend({
+          gate: id,
+          changeName: inputData.changeName,
+          done: inputData.trace,
+          verify: verifyHint(id),
+        });
       if (!resumeData.approved) throw new Error(`${id}: rejected`);
       return { ...inputData, trace: [...inputData.trace, `${id}:approved`] };
     },

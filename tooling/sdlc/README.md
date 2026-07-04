@@ -82,6 +82,28 @@ pnpm sdlc --issue https://github.com/gayanwiharagoda/araliya/issues/42   # a lin
 | **merge**   | the feature PR        | approve/reject via CLI (auto-resume-on-merge is Group 5, not yet built) |
 | **release** | the release-please PR | approve/reject via CLI                                                  |
 
+## Interactive runs (`-i`)
+
+`-i` / `--interactive` drives the whole run in **one terminal**: at each gate it prints a
+summary — what's been done, and what to verify — and asks `y/N` right there, then continues.
+No second `resume` command, no new terminal.
+
+```sh
+pnpm sdlc add-dark-mode -i
+```
+
+```
+── plan-gate ──
+  change:  add-dark-mode
+  done:    propose
+  verify:  Review the proposal, specs, and tasks.md before the build starts.
+  approve & continue? [y/N]
+```
+
+`y` continues to the next stage; `N` rejects (the run fails). Answers can be piped for
+scripted runs (`printf 'y\ny\ny\n' | pnpm sdlc feat -i`). Without `-i` the run suspends and
+you resume with a separate command (below) — better for detached/CI use.
+
 ## Unattended runs (`--auto`)
 
 By default a run stops at each of the 3 gates for a human. `--auto` skips gates:
