@@ -74,7 +74,36 @@ describe("stream-json formatter", () => {
           ],
         },
       }),
-    ).toContain("Bash");
+    ).toContain("Bash ls");
+    // Read shows the short path, not the whole input blob.
+    expect(
+      formatEvent({
+        type: "assistant",
+        message: {
+          content: [
+            {
+              type: "tool_use",
+              name: "Read",
+              input: { file_path: "/a/b/c/convex/schema.ts" },
+            },
+          ],
+        },
+      }),
+    ).toBe("🔧 Read convex/schema.ts");
+    // A big tool result collapses to a line count instead of dumping content.
+    expect(
+      formatEvent({
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              content: "1 a\n2 b\n3 c\n4 d\n5 e",
+            },
+          ],
+        },
+      }),
+    ).toContain("5 lines");
     expect(
       formatEvent({
         type: "result",
