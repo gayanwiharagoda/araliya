@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createEngine, startRun, resumeRun } from "./engine.js";
+import { createEngine, startRun, resumeRun, runInteractive } from "./engine.js";
 
 // Control-plane tests are hermetic: dry-run skips the real subprocess stages
 // (sync/validate/release/archive) so we exercise ordering/suspend/resume only.
@@ -92,5 +92,38 @@ describe("sdlc walking skeleton", () => {
     const r = result as { status: string; suspended?: string[][] };
     expect(r.status).toBe("suspended");
     expect(r.suspended?.[0]?.join("/")).toBe("merge-gate"); // past plan-gate, paused at the PR
+  });
+
+  it("interactive: prompts at each gate with a summary and completes in one process", async () => {
+    const m = createEngine(tempDb());
+    const prompted: string[] = [];
+    const { result } = await runInteractive(
+      m,
+      "demo-i",
+      "",
+      "off",
+      async (p) => {
+        prompted.push(p.gate ?? "escalation");
+        expect(p.verify).toBeTruthy(); // the summary carries a "what to verify" hint
+        return true;
+      },
+    );
+    expect(prompted).toEqual(["plan-gate", "merge-gate", "release-gate"]);
+    expect(result.status).toBe("success");
+    expect(result.status === "success" && result.result.trace).toEqual(
+      EXPECTED_TRACE,
+    );
+  });
+
+  it("interactive: declining a gate fails the run", async () => {
+    const m = createEngine(tempDb());
+    const { result } = await runInteractive(
+      m,
+      "demo-i2",
+      "",
+      "off",
+      async () => false,
+    );
+    expect(result.status).toBe("failed");
   });
 });

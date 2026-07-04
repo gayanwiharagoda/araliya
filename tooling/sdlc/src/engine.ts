@@ -39,6 +39,50 @@ export async function startRun(
   return { runId: run.runId, result };
 }
 
+/** What a gate/escalation hands the human at a suspend (see the gate `suspendSchema`). */
+export interface GatePrompt {
+  gate?: string; // set for the 3 approval gates; absent for the build-result escalation
+  changeName?: string;
+  done?: string[]; // stages completed so far
+  verify?: string; // what to check
+  reason?: string; // build-result escalation only
+  attempts?: number;
+}
+
+/**
+ * Drive a run to completion in ONE process: start it, and whenever it suspends at a
+ * gate, ask `decide` (which shows the summary + prompts) and resume in place — no second
+ * `resume` command, no new terminal. Mastra supports resuming the same run handle.
+ */
+export async function runInteractive(
+  mastra: Mastra,
+  changeName: string,
+  brief: string,
+  auto: Ctx["auto"],
+  decide: (prompt: GatePrompt) => Promise<boolean>,
+) {
+  assertNoApiKey();
+  const cwd = isDryRun() ? repoRoot() : createWorktree(changeName, repoRoot());
+  const run = await mastra.getWorkflow("sdlc").createRun();
+  let result = await run.start({
+    inputData: initialCtx(changeName, cwd, brief, auto),
+  });
+  while (result.status === "suspended") {
+    // `suspendPayload` is keyed by the suspended step id (one at a time here).
+    const r = result as {
+      suspended?: string[][];
+      suspendPayload?: Record<string, GatePrompt>;
+    };
+    const stepId = r.suspended?.[0]?.[0] ?? "";
+    const prompt = r.suspendPayload?.[stepId] ?? {};
+    const approved = await decide(prompt);
+    // The build-result escalation has no reject path — declining just stops here.
+    if (!approved && prompt.gate === undefined) break;
+    result = await run.resume({ resumeData: { approved, proceed: approved } });
+  }
+  return { runId: run.runId, result };
+}
+
 /** Resume a suspended run's current gate with an approve/reject decision. */
 export async function resumeRun(
   mastra: Mastra,
