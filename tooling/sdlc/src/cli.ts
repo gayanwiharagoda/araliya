@@ -5,6 +5,7 @@ import {
   adoptIssue,
   normalizeIssueRef,
 } from "./issue.js";
+import { log } from "./log.js";
 
 const DB = process.env.SDLC_DB ?? ".sdlc/runs.db";
 
@@ -69,6 +70,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err);
+  log.error(err instanceof Error ? (err.stack ?? err.message) : String(err));
   process.exit(1);
 });

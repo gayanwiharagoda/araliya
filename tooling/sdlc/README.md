@@ -106,16 +106,28 @@ SDLC_MODEL_COMMIT_PR=openai/gpt-4o-mini pnpm sdlc add-dark-mode   # needs OPENAI
 Provider prefixes: `claude` (subscription CLI), `ollama/*` (local HTTP, no key),
 `openai/*` (needs `OPENAI_API_KEY` — a different vendor).
 
+## Logging
+
+One leveled logger (Mastra's, pino-backed — no extra dependency) carries the stage banners,
+the agent's live feed, and the workflow engine's own internals in one timestamped stream.
+Set the verbosity with `SDLC_LOG_LEVEL` (`debug`/`info`/`warn`/`error`/`none`, default `info`);
+`debug` also surfaces the raw `claude` stream-json events behind the pretty feed.
+
+```sh
+SDLC_LOG_LEVEL=debug pnpm sdlc add-dark-mode   # raw agent events + engine detail
+```
+
 ## Environment variables
 
-| Var                             | Purpose                                            | Default         |
-| ------------------------------- | -------------------------------------------------- | --------------- |
-| `SDLC_DRY_RUN`                  | `1` = skip all real execution (control-plane only) | off             |
-| `SDLC_DB`                       | LibSQL run-state file                              | `.sdlc/runs.db` |
-| `SDLC_MODEL_<STAGE>`            | per-stage model override (`REVIEW`, `COMMIT_PR`)   | `claude`        |
-| `OPENAI_API_KEY`                | required only for `openai/*` models                | —               |
-| `GITHUB_TOKEN`, `SDLC_REPO_URL` | required only for the live release stage           | —               |
-| `ANTHROPIC_API_KEY`             | **must be unset** (fail-fast guard)                | —               |
+| Var                             | Purpose                                                               | Default         |
+| ------------------------------- | --------------------------------------------------------------------- | --------------- |
+| `SDLC_DRY_RUN`                  | `1` = skip all real execution (control-plane only)                    | off             |
+| `SDLC_DB`                       | LibSQL run-state file                                                 | `.sdlc/runs.db` |
+| `SDLC_LOG_LEVEL`                | `debug`/`info`/`warn`/`error`/`none` — `debug` shows raw agent events | `info`          |
+| `SDLC_MODEL_<STAGE>`            | per-stage model override (`REVIEW`, `COMMIT_PR`)                      | `claude`        |
+| `OPENAI_API_KEY`                | required only for `openai/*` models                                   | —               |
+| `GITHUB_TOKEN`, `SDLC_REPO_URL` | required only for the live release stage                              | —               |
+| `ANTHROPIC_API_KEY`             | **must be unset** (fail-fast guard)                                   | —               |
 
 ## Known limitations (work in progress)
 
