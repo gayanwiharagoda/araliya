@@ -18,12 +18,14 @@ DomusOS v1 is a payments + accountability layer for Sri Lankan apartment communi
 ## Capabilities
 
 ### New Capabilities
+
 - `committee-auth`: Convex Auth Password provider — committee admins sign up / sign in with email + password; server helper to resolve the authenticated user id.
 - `multi-tenant-core`: buildings / units / members schema, their CRUD functions, and the central `requireRole` membership-and-role guard that scopes every domain operation to one building.
 - `web-dashboard-shell`: authenticated web UI to sign up/in, create a building, add units, and list members.
 - `mobile-shell`: mobile app wired to Convex, landing on an "enter via invite" placeholder state.
 
 ### Modified Capabilities
+
 <!-- None — greenfield; no existing specs in openspec/specs/. -->
 
 ## Impact
