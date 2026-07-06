@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { runShell, runGated, repoRoot } from "./shell.js";
 
 // These tests exercise real subprocesses, so dry-run must be off.
@@ -16,7 +18,11 @@ describe("shell runner", () => {
   });
 
   it("resolves the repo root", () => {
-    expect(repoRoot()).toMatch(/araliya$/);
+    // Repo-agnostic: the resolved root must be an absolute path that holds
+    // the monorepo's workspace marker (works in the base repo, forks, and worktrees).
+    const root = repoRoot();
+    expect(root.startsWith("/")).toBe(true);
+    expect(existsSync(join(root, "pnpm-workspace.yaml"))).toBe(true);
   });
 });
 
