@@ -1,8 +1,15 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [".env", ".env.local"],
+  "globalEnv": [
+    "NEXT_PUBLIC_CONVEX_URL",
+    "EXPO_PUBLIC_CONVEX_URL",
+    "EXTEND_ROOT_ENV"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env", ".env.local"],
       "outputs": [".next/**", "dist/**"]
     },
     "dev": {
