@@ -46,3 +46,13 @@
 - [x] 6.2 Add `release-please-config.json` + `.release-please-manifest.json` (seed web 0.1.0, mobile 1.0.0, backend baseline 0.0.0)
 - [x] 6.3 Add revision note to ADR 0009 (release-please via local CLI, not GitHub Action)
 - [x] 6.4 **Verify:** malformed commit rejected by commitlint (exit 1), conventional accepted (exit 0), release-please CLI invokable. Live Release-PR cut needs GITHUB_TOKEN (deferred).
+
+## Deferred (descoped at archive, 2026-07-09)
+
+These 5 tasks were intentionally descoped when this change was archived. They need live
+external runs or an as-yet-unbuilt feature, and are tracked as the `ponytail:` debt at
+`tooling/sdlc/src/stages.ts:112` (auto-resume-on-merge, Group 5).
+
+- **3.7** — LIVE build→validate on a real Claude subscription (needs the user's account + billing check).
+- **4.5** — LIVE `review` against a local Ollama model (needs Ollama running).
+- **5.1–5.3** — PR-backed merge/release auto-resume-on-merge; not yet implemented, so the merge and release gates stay manual for now.
