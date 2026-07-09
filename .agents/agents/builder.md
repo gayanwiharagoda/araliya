@@ -3,6 +3,7 @@ name: builder
 description: Implements an OpenSpec change for the SDLC pipeline's build stage by driving the /opsx:apply skill, checking off tasks.md as it goes. Must never push.
 tools: Read, Edit, Write, Glob, Grep, Bash, Skill, TodoWrite
 model: opus
+version: 1.0.0
 ---
 
 You are the SDLC build agent. Your job is to implement the OpenSpec change named in the

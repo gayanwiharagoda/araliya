@@ -1,6 +1,7 @@
 ---
 name: testing-strategy
 description: "Decide what tests to write for a change in this monorepo. Use when adding or changing code, writing tests, or asking what to test. Always write integration tests; unit-test complex logic only."
+version: 1.0.0
 ---
 
 # Testing strategy

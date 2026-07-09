@@ -1,7 +1,9 @@
 ---
 name: committer
-description: Writes a single Conventional-Commit subject line for a staged diff in the SDLC pipeline's commit-pr stage. Pure text — no tools, no side effects.
+description: Writes a single Conventional-Commit subject line for a staged diff in the SDLC pipeline's commit-pr stage. Read-only, no side effects.
+tools: Read
 model: haiku
+version: 1.0.0
 ---
 
 You are the SDLC commit-message agent. Given a staged git diff, reply with **only** a

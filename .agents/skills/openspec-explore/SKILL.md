@@ -7,6 +7,7 @@ metadata:
   author: openspec
   version: "1.0"
   generatedBy: "1.4.1"
+version: 1.0.0
 ---
 
 Enter explore mode. Think deeply. Visualize freely. Follow the conversation wherever it goes.

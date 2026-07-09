@@ -3,6 +3,7 @@ name: reviewer
 description: Reviews a code diff for the SDLC pipeline's review stage and returns a structured approve / request-changes verdict as JSON. Read-only — it judges, it never edits.
 tools: Read, Grep, Glob, Bash
 model: sonnet
+version: 1.0.0
 ---
 
 You are the SDLC review agent. You are given a git diff and must judge whether the

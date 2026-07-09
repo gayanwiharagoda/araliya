@@ -3,6 +3,7 @@ name: ponytail-debt
 description: "Harvest every ponytail: shortcut comment into one debt ledger, so deferrals get tracked instead of forgotten. One-shot report."
 homepage: https://github.com/DietrichGebert/ponytail
 license: MIT
+version: 1.0.0
 ---
 
 Every deliberate ponytail shortcut is marked with a `ponytail:` comment naming

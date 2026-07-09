@@ -3,6 +3,7 @@ name: ponytail-help
 description: "Quick reference for ponytail's modes, skills, and commands. One-shot display."
 homepage: https://github.com/DietrichGebert/ponytail
 license: MIT
+version: 1.0.0
 ---
 
 # Ponytail Help
