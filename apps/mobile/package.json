@@ -27,7 +27,12 @@
     "@domus/backend": "workspace:*"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.2",
     "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.2",
+    "@vitejs/plugin-react": "^6.0.3",
+    "jsdom": "^29.1.1",
+    "react-dom": "19.2.3",
     "typescript": "~6.0.3",
     "vitest": "^4.1.9"
   }

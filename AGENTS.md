@@ -77,11 +77,12 @@ Always-apply ruleset: @.agents/rules/ponytail.md
 
 ## Tech Stack
 
-Turborepo + pnpm monorepo with three workspaces:
+Turborepo + pnpm monorepo:
 
 - `apps/web` — Next.js 16 (App Router, React 19)
 - `apps/mobile` — Expo 56 (expo-router, React Native 0.85)
 - `packages/backend` — Convex (shared backend: schema, queries, mutations)
+- `tooling/sdlc` — `@domus/sdlc`, the agentic SDLC orchestrator (see `tooling/sdlc/README.md`)
 
 TypeScript 6 strict mode. Vitest 4 for tests. ESLint 9 + Prettier + Husky.
 
