@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "ask": ["Bash(git push:*)", "Bash(gh pr merge:*)", "Bash(gh release:*)"],
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm validate:*)",
+      "Bash(pnpm turbo typecheck:*)",
+      "Bash(pnpm turbo lint:*)",
+      "Bash(pnpm turbo test:*)",
+      "Bash(pnpm format:check:*)"
+    ]
+  }
+}

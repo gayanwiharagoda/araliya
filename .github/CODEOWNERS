@@ -1,0 +1,7 @@
+# Agent configuration is policy, not just code — changes here decide what AI may do
+# in this repo, so they require the owner's review before merging.
+/.agents/           @gayanwiharagoda
+/.claude/           @gayanwiharagoda
+/skills-lock.json   @gayanwiharagoda
+/AGENTS.md          @gayanwiharagoda
+/CLAUDE.md          @gayanwiharagoda

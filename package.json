@@ -19,7 +19,8 @@
     "sdlc": "pnpm --filter @domus/sdlc sdlc",
     "openspec:sync": "node scripts/openspec-sync.mjs",
     "openspec:sync:test": "node --test scripts/*.test.mjs",
-    "validate": "turbo typecheck lint && prettier --check . && turbo test",
+    "agents:lint": "node scripts/agents-lint.mjs",
+    "validate": "turbo typecheck lint && prettier --check . && turbo test && pnpm openspec:sync:test && pnpm agents:lint",
     "prepare": "husky"
   },
   "devDependencies": {
