@@ -1,5 +1,6 @@
 {
   "apps/web": "0.1.0",
   "apps/mobile": "1.0.0",
-  "packages/backend": "0.0.0"
+  "packages/backend": "0.0.0",
+  "tooling/sdlc": "0.0.0"
 }

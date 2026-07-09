@@ -3,7 +3,8 @@
   "packages": {
     "apps/web": { "release-type": "node", "component": "web" },
     "apps/mobile": { "release-type": "node", "component": "mobile" },
-    "packages/backend": { "release-type": "node", "component": "backend" }
+    "packages/backend": { "release-type": "node", "component": "backend" },
+    "tooling/sdlc": { "release-type": "node", "component": "sdlc" }
   },
   "separate-pull-requests": false,
   "include-component-in-tag": true
