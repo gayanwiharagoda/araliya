@@ -36,5 +36,6 @@
 
 ## 7. Validate
 
-- [ ] 7.1 `pnpm validate` green (typecheck → lint → format → test)
-- [ ] 7.2 E2E (Playwright, web): sign up → create building → see it listed
+- [x] 7.1 `pnpm validate` green (typecheck → lint → format → test)
+- [ ] 7.2 E2E (Playwright, web): sign up → create building → see it listed  
+  **Blocked**: requires `NEXT_PUBLIC_CONVEX_URL` + Convex Auth keys from `npx convex dev` / `npx @convex-dev/auth` (interactive login needed).
