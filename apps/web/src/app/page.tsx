@@ -1,21 +1,15 @@
 "use client";
 
-import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
-import { AuthForm } from "./AuthForm";
-import { Dashboard } from "./Dashboard";
+import { useQuery } from "convex/react";
+import { api } from "@domus/backend/convex/_generated/api";
 
 export default function Home() {
+  const tasks = useQuery(api.tasks.list);
+
   return (
-    <>
-      <AuthLoading>
-        <p>Loading…</p>
-      </AuthLoading>
-      <Unauthenticated>
-        <AuthForm />
-      </Unauthenticated>
-      <Authenticated>
-        <Dashboard />
-      </Authenticated>
-    </>
+    <main>
+      <h1>DomusOS</h1>
+      <pre>{JSON.stringify(tasks, null, 2)}</pre>
+    </main>
   );
 }
