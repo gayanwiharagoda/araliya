@@ -50,6 +50,14 @@ function BuildingDetail({ buildingId }: { buildingId: Id<"buildings"> }) {
   const units = useQuery(api.units.list, { buildingId });
   const members = useQuery(api.members.list, { buildingId });
   const addUnit = useMutation(api.units.add);
+  const generateInvite = useMutation(api.members.generateInvite);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+
+  async function createInvite(unitId: Id<"units">) {
+    const invite = await generateInvite({ buildingId, unitId });
+    await navigator.clipboard?.writeText(invite.fallbackUrl);
+    setInviteUrl(invite.fallbackUrl);
+  }
 
   return (
     <section>
@@ -67,8 +75,14 @@ function BuildingDetail({ buildingId }: { buildingId: Id<"buildings"> }) {
       </form>
       <ul>
         {units?.map((u) => (
-          <li key={u._id}>{u.label}</li>
+          <li key={u._id}>
+            {u.label}{" "}
+            <button onClick={() => void createInvite(u._id)}>
+              Create invite
+            </button>
+          </li>
         ))}
+        {inviteUrl && <p>Invite link copied: {inviteUrl}</p>}
       </ul>
 
       <h2>Members</h2>

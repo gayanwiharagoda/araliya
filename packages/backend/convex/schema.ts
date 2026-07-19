@@ -37,7 +37,10 @@ export default defineSchema({
     unitId: v.optional(v.id("units")), // null for committee-only members
     role,
     status: v.union(v.literal("invited"), v.literal("active")),
-    inviteToken: v.optional(v.string()), // reserved for ticket 2 invite redemption
+    inviteToken: v.optional(v.string()),
+    inviteTokenExpiresAt: v.optional(v.number()),
+    inviteTokenClaimedBy: v.optional(v.id("users")),
+    inviteTokenClaimedAt: v.optional(v.number()),
   })
     .index("by_building", ["buildingId"])
     .index("by_user", ["userId"])

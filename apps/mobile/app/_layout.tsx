@@ -1,4 +1,5 @@
-import { ConvexProvider, ConvexReactClient } from "convex/react";
+import { ConvexReactClient } from "convex/react";
+import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { Slot } from "expo-router";
 
 const convex = new ConvexReactClient(
@@ -7,8 +8,8 @@ const convex = new ConvexReactClient(
 
 export default function RootLayout() {
   return (
-    <ConvexProvider client={convex}>
+    <ConvexAuthProvider client={convex}>
       <Slot />
-    </ConvexProvider>
+    </ConvexAuthProvider>
   );
 }
