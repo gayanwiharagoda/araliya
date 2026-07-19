@@ -30,6 +30,9 @@ Thumbs.db
 # sdlc orchestrator local run state (LibSQL)
 .sdlc/
 
+# Mastra Studio (`mastra dev`) build cache
+.mastra/
+
 # ide
 .idea/
 *.swp
