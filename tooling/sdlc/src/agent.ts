@@ -87,19 +87,41 @@ function toPiTool(name: string): string | undefined {
   return PI_TOOL_MAP[name];
 }
 
+const PI_SKILL_MAP: Record<string, string> = {
+  propose: "openspec-propose",
+  apply: "openspec-apply-change",
+};
+
+/** Parse a `/opsx:<skill>` command from the start of the prompt. */
+function parsePiSkill(
+  prompt: string,
+  cwd: string,
+): { skillPath?: string; prompt: string } {
+  const match = prompt.match(/^\/opsx:(\S+)(?:\s+|\n)?([\s\S]*)$/);
+  if (!match) return { prompt };
+  const skill = match[1] ? PI_SKILL_MAP[match[1]] : undefined;
+  if (!skill) return { prompt };
+  return {
+    skillPath: join(cwd, ".agents", "skills", skill),
+    prompt: match[2]?.trim() ?? "",
+  };
+}
+
 /** Pure: build the `pi` argv for a skill invocation. */
 export function buildPiArgs(
   prompt: string,
   opts: SkillOptions = {},
   agentBody = "You are a helpful coding assistant.",
 ): string[] {
+  const cwd = opts.cwd ?? repoRoot();
+  const { skillPath, prompt: userPrompt } = parsePiSkill(prompt, cwd);
   const args = [
     "--provider",
     process.env.SDLC_PI_PROVIDER ?? "kimi",
     "--print",
-    "--system-prompt",
-    agentBody,
   ];
+  if (skillPath) args.push("--skill", skillPath);
+  args.push("--system-prompt", agentBody);
   const tools = opts.allowedTools
     ?.map(toPiTool)
     .filter((t): t is string => t !== undefined) ?? [
@@ -110,7 +132,7 @@ export function buildPiArgs(
   ];
   if (tools.length) args.push("--tools", tools.join(","));
   // pi does not support --disallowedTools; push denial is enforced by the system prompt.
-  args.push(prompt);
+  args.push(userPrompt || prompt);
   return args;
 }
 
