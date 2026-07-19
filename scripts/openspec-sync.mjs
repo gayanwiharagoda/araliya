@@ -55,6 +55,10 @@ export function marker(changeId) {
   return `<!-- openspec:${changeId} -->`;
 }
 
+export function archiveChangeId(directoryName) {
+  return directoryName.replace(/^\d{4}-\d{2}-\d{2}-/, "");
+}
+
 /** Render the issue body: hidden marker + a GitHub-native checklist (progress bar). */
 export function buildBody(changeId, items, archived) {
   const lines = items.map((i) => `- [${i.checked ? "x" : " "}] ${i.text}`);
@@ -125,8 +129,16 @@ function main() {
   );
 
   const changes = [
-    ...listChangeDirs(CHANGES_DIR).map((name) => ({ name, archived: false })),
-    ...listChangeDirs(ARCHIVE_DIR).map((name) => ({ name, archived: true })),
+    ...listChangeDirs(CHANGES_DIR).map((directoryName) => ({
+      directoryName,
+      changeId: directoryName,
+      archived: false,
+    })),
+    ...listChangeDirs(ARCHIVE_DIR).map((directoryName) => ({
+      directoryName,
+      changeId: archiveChangeId(directoryName),
+      archived: true,
+    })),
   ];
 
   if (!changes.length) {
@@ -134,14 +146,14 @@ function main() {
     return;
   }
 
-  for (const { name, archived } of changes) {
+  for (const { directoryName, changeId, archived } of changes) {
     const dir = archived ? ARCHIVE_DIR : CHANGES_DIR;
-    const { tasksMd, proposalMd } = readChange(dir, name);
+    const { tasksMd, proposalMd } = readChange(dir, directoryName);
     const { items, checked, total } = parseTasks(tasksMd);
     const status = deriveStatus({ checked, total, archived });
-    const body = buildBody(name, items, archived);
-    const title = extractTitle(proposalMd, name);
-    const found = findIssueByMarker(existing, name);
+    const body = buildBody(changeId, items, archived);
+    const title = extractTitle(proposalMd, changeId);
+    const found = findIssueByMarker(existing, changeId);
 
     let url;
     if (found) {
@@ -153,7 +165,7 @@ function main() {
         gh(["issue", "reopen", String(found.number)]);
       url = found.url;
       console.log(
-        `= ${name} -> #${found.number} (${status}, ${checked}/${total})`,
+        `= ${changeId} -> #${found.number} (${status}, ${checked}/${total})`,
       );
     } else {
       url = gh([
@@ -169,7 +181,7 @@ function main() {
         repoLabel,
       ]);
       if (status === "Done") gh(["issue", "close", url]);
-      console.log(`+ ${name} -> ${url} (${status}, ${checked}/${total})`);
+      console.log(`+ ${changeId} -> ${url} (${status}, ${checked}/${total})`);
     }
 
     if (config) syncProjectItem(config, url, status);

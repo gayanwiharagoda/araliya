@@ -8,6 +8,7 @@ import {
   extractTitle,
   buildBody,
   marker,
+  archiveChangeId,
 } from "./openspec-sync.mjs";
 
 const SAMPLE = `## 1. Setup
@@ -44,6 +45,16 @@ test("extractTitle prefers proposal H1, falls back to change id", () => {
   );
   assert.equal(extractTitle("no heading here", "add-login"), "add-login");
   assert.equal(extractTitle("", "add-login"), "add-login");
+});
+
+test("archiveChangeId removes the archive date prefix", () => {
+  assert.equal(
+    archiveChangeId(
+      "2026-07-19-foundation-multi-tenant-core-auth-building-setup",
+    ),
+    "foundation-multi-tenant-core-auth-building-setup",
+  );
+  assert.equal(archiveChangeId("add-login"), "add-login");
 });
 
 test("buildBody embeds the idempotency marker and a checklist", () => {
