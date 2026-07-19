@@ -11,21 +11,13 @@ vi.mock("react-native", async () => {
   };
 });
 
-vi.mock("@domus/backend/convex/_generated/api", () => ({
-  api: { tasks: { list: "tasks:list" } },
-}));
-
-vi.mock("convex/react", () => ({
-  useQuery: () => [{ _id: "1", text: "Buy milk", isCompleted: false }],
-}));
-
 import { render, screen } from "@testing-library/react";
 import Home from "./index";
 
 describe("mobile Home", () => {
-  it("renders tasks returned by the Convex query", () => {
+  it("renders the invite-landing screen", () => {
     render(<Home />);
-    expect(screen.getByText(/Buy milk/)).toBeDefined();
     expect(screen.getByText("DomusOS")).toBeDefined();
+    expect(screen.getByText(/Enter via your building invite/i)).toBeDefined();
   });
 });
