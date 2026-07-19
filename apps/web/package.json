@@ -13,7 +13,6 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@convex-dev/auth": "^0.0.87",
     "@domus/backend": "workspace:*",
     "convex": "^1.42.0",
     "next": "16.2.9",
