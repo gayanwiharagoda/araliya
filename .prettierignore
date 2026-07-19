@@ -8,3 +8,4 @@ coverage/
 pnpm-lock.yaml
 convex/_generated/
 .agents/skills/
+.mastra/

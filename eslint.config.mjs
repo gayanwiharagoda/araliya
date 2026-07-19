@@ -13,7 +13,9 @@ export default tseslint.config(
       "**/.expo/",
       "**/coverage/",
       "**/.turbo/",
+      "**/.mastra/",
       "**/convex/_generated/",
+      "**/.mastra/",
     ],
   },
 );

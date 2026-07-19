@@ -1,12 +1,13 @@
 import { runShellArgs, isDryRun } from "./shell.js";
-import { assertNoApiKey } from "./agent.js";
+import { assertNoApiKey, readAgentBody } from "./agent.js";
 
 /**
  * Model-agnostic text completion for the reasoning stages (review, commit-msg),
  * dependency-free. Per-stage policy (task 4.4): agentic stages stay pinned to
- * Claude; cheap reasoning stages swap via `SDLC_MODEL_<STAGE>`.
+ * the configured provider; cheap reasoning stages swap via `SDLC_MODEL_<STAGE>`.
  *
  *   claude[/<model>]   → `claude -p` on the subscription (no API key)
+ *   pi[/<model>]       → local `pi` harness (e.g. `--provider kimi`)
  *   ollama/<model>     → local Ollama HTTP (no key)
  *   openai/<model>     → OpenAI API (needs OPENAI_API_KEY — a different vendor)
  */
@@ -24,7 +25,7 @@ export function parseModel(spec: string): { provider: string; name?: string } {
 }
 
 export interface ModelOptions {
-  /** Run the claude call as a named subagent (`.claude/agents/<name>.md`). Claude-only. */
+  /** Run the call as a named agent (`.claude/agents/<name>.md`) — its body becomes the system prompt. */
   agent?: string;
   cwd?: string;
 }
@@ -41,8 +42,6 @@ export async function runModel(
     assertNoApiKey();
     const args = ["-p", prompt, "--output-format", "json"];
     if (name) args.push("--model", name);
-    // Route through a subagent when asked; its frontmatter picks the model unless
-    // SDLC_MODEL_<STAGE> overrode it above. Agents are a Claude-only concept.
     if (opts.agent) args.push("--agent", opts.agent);
     const { stdout } = runShellArgs("claude", args, opts.cwd);
     try {
@@ -50,6 +49,19 @@ export async function runModel(
     } catch {
       return stdout;
     }
+  }
+
+  if (provider === "pi") {
+    const args = [
+      "--provider",
+      process.env.SDLC_PI_PROVIDER ?? "kimi",
+      "--print",
+    ];
+    if (name) args.push("--model", name);
+    if (opts.agent) args.push("--system-prompt", readAgentBody(opts.agent));
+    args.push(prompt);
+    const { stdout } = runShellArgs("pi", args, opts.cwd);
+    return stdout;
   }
 
   if (provider === "ollama") {

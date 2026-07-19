@@ -1,23 +1,32 @@
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { repoRoot, isDryRun } from "./shell.js";
 import { log } from "./log.js";
 
 /**
  * Thin agent layer. Agent stages own NO logic — each just invokes an existing
- * Claude Code skill (`/opsx:apply`, `/opsx:propose`, `/code-review`, …) headless
- * via `claude -p`, scoped to per-stage tools. All behaviour lives in the skills,
- * which already match this repo's tools/architecture. Billing is the Claude
- * subscription (the CLI's OAuth) — never an API key.
+ * skill (`/opsx:apply`, `/opsx:propose`, ...) headless, scoped to per-stage tools.
+ *
+ * Provider selection:
+ *   claude (default) → Claude Code subscription (`claude -p`)
+ *   pi               → local harness via the `pi` CLI (e.g. `--provider kimi`)
+ *
+ * Behaviour lives in the skills, which already match this repo's tools/architecture.
  */
 
-/** Fail fast so a stray API key can't silently move agent runs onto API billing. */
+/** Fail fast so a stray API key can't silently move Claude stages onto API billing. */
 export function assertNoApiKey(): void {
   if (process.env.ANTHROPIC_API_KEY) {
     throw new Error(
       "ANTHROPIC_API_KEY is set. Unset it so agent stages bill to your Claude subscription, not the API.",
     );
   }
+}
+
+export function agentProvider(): string {
+  return process.env.SDLC_AGENT_PROVIDER ?? "claude";
 }
 
 export interface SkillOptions {
@@ -27,9 +36,17 @@ export interface SkillOptions {
   disallowedTools?: string[];
   maxTurns?: number;
   model?: string;
-  /** Run as a named subagent (`.claude/agents/<name>.md`) — pins its model + tool scope. */
+  /** Run as a named agent (`.claude/agents/<name>.md`) — its body becomes the system prompt. */
   agent?: string;
   cwd?: string;
+}
+
+/** Read an agent markdown file and return the body (after the YAML frontmatter). */
+export function readAgentBody(name: string): string {
+  const path = join(repoRoot(), ".claude", "agents", `${name}.md`);
+  const text = readFileSync(path, "utf-8");
+  const match = text.match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/);
+  return (match?.[1] ?? text).trim();
 }
 
 /** Pure: build the `claude -p` argv for a skill invocation (unit-testable, no side effects). */
@@ -56,6 +73,44 @@ export function buildClaudeArgs(
   if (opts.model) args.push("--model", opts.model);
   // The subagent's frontmatter carries the model + tool scope; no --model needed.
   if (opts.agent) args.push("--agent", opts.agent);
+  return args;
+}
+
+const PI_TOOL_MAP: Record<string, string> = {
+  Read: "read",
+  Edit: "edit",
+  Write: "write",
+  Bash: "bash",
+};
+
+function toPiTool(name: string): string | undefined {
+  return PI_TOOL_MAP[name];
+}
+
+/** Pure: build the `pi` argv for a skill invocation. */
+export function buildPiArgs(
+  prompt: string,
+  opts: SkillOptions = {},
+  agentBody = "You are a helpful coding assistant.",
+): string[] {
+  const args = [
+    "--provider",
+    process.env.SDLC_PI_PROVIDER ?? "kimi",
+    "--print",
+    "--system-prompt",
+    agentBody,
+  ];
+  const tools = opts.allowedTools
+    ?.map(toPiTool)
+    .filter((t): t is string => t !== undefined) ?? [
+    "read",
+    "bash",
+    "edit",
+    "write",
+  ];
+  if (tools.length) args.push("--tools", tools.join(","));
+  // pi does not support --disallowedTools; push denial is enforced by the system prompt.
+  args.push(prompt);
   return args;
 }
 
@@ -204,6 +259,19 @@ function streamClaude(args: string[], cwd: string): Promise<number> {
   });
 }
 
+/** Spawn `pi`, streaming its plain-text output line by line. */
+function streamPi(args: string[], cwd: string): Promise<number> {
+  return new Promise((resolve) => {
+    const child = spawn("pi", args, { cwd });
+    createInterface({ input: child.stdout }).on("line", (line) => {
+      if (!line.trim()) return;
+      log.info(line);
+    });
+    child.stderr.on("data", (d: Buffer) => log.error(d.toString().trimEnd()));
+    child.on("close", (code) => resolve(code ?? 1));
+  });
+}
+
 /**
  * Invoke a skill. Returns the (empty) result — callers decide success from
  * deterministic artifacts (tasks.md checkoff, `pnpm validate`, `gh pr` state),
@@ -213,11 +281,24 @@ export async function runSkill(
   prompt: string,
   opts: SkillOptions = {},
 ): Promise<AgentResult> {
-  assertNoApiKey();
+  const provider = agentProvider();
+  if (provider === "claude") assertNoApiKey();
   if (isDryRun()) return { code: 0, json: { dryRun: true }, raw: "" };
-  const code = await streamClaude(
-    buildClaudeArgs(prompt, opts),
-    opts.cwd ?? repoRoot(),
-  );
-  return { code, json: undefined, raw: "" };
+  const cwd = opts.cwd ?? repoRoot();
+
+  if (provider === "claude") {
+    assertNoApiKey();
+    const code = await streamClaude(buildClaudeArgs(prompt, opts), cwd);
+    return { code, json: undefined, raw: "" };
+  }
+
+  if (provider === "pi") {
+    const body = opts.agent
+      ? readAgentBody(opts.agent)
+      : "You are a helpful coding assistant.";
+    const code = await streamPi(buildPiArgs(prompt, opts, body), cwd);
+    return { code, json: undefined, raw: "" };
+  }
+
+  throw new Error(`unknown agent provider: ${provider}`);
 }
