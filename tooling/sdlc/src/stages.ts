@@ -26,6 +26,9 @@ export const Ctx = z.object({
   trace: z.array(z.string()),
   validatePassed: z.boolean(),
   attempts: z.number(),
+  // Tail of the last `pnpm validate` failure, handed to the next build attempt so the
+  // retry fixes the actual errors instead of re-running blind. Empty when validate passed.
+  lastFailure: z.string(),
   // Unattended mode: "off" = human gates (default), "pr" = auto up to the PR then stop at
   // merge-gate, "full" = auto-approve every gate through archive.
   auto: z.enum(["off", "pr", "full"]),
@@ -122,6 +125,9 @@ const archiveCmd = (ctx: Ctx) =>
 // still enforces the hard push deny — it composes with --agent.
 const NO_PUSH = ["Bash(git push:*)", "Bash(gh:*)"];
 
+/** Build↔validate retry budget before escalating to a human (task 3.6). */
+const MAX_BUILD_ATTEMPTS = 5;
+
 // Thin agent: the /opsx:propose skill writes proposal/specs/tasks. Claude-pinned
 // (agentic, edits files). The human reviews at the plan gate that follows.
 const propose = createStep({
@@ -217,7 +223,12 @@ const build = createStep({
   execute: async ({ inputData }) => {
     announce("build");
     if (!isDryRun()) {
-      await runSkill(`/opsx:apply ${inputData.changeName}`, {
+      // On a retry, tell the builder exactly what validate failed on — otherwise
+      // re-running apply on already-checked tasks is a no-op that fails identically.
+      const fix = inputData.lastFailure
+        ? `\n\nThe previous attempt failed \`pnpm validate\`. Fix these errors before finishing:\n\n${inputData.lastFailure}`
+        : "";
+      await runSkill(`/opsx:apply ${inputData.changeName}${fix}`, {
         agent: "builder",
         disallowedTools: NO_PUSH, // build must not push
         maxTurns: 200,
@@ -240,14 +251,28 @@ const validate = createStep({
   // checked AND `pnpm validate` exits 0. This is the branch signal for the loop.
   execute: async ({ inputData }) => {
     announce("validate");
-    const passed = isDryRun()
-      ? true
-      : allTasksChecked(inputData.changeName, inputData.cwd) &&
-        runShell("pnpm validate", inputData.cwd).code === 0;
+    if (isDryRun())
+      return {
+        ...inputData,
+        trace: [...inputData.trace, "validate"],
+        validatePassed: true,
+        lastFailure: "",
+      };
+    const tasksDone = allTasksChecked(inputData.changeName, inputData.cwd);
+    const r = runShell("pnpm validate", inputData.cwd);
+    const passed = tasksDone && r.code === 0;
+    // Capture WHY it failed so the next build attempt is corrective. Tail only — the
+    // failing errors land at the end of validate's fail-fast output.
+    const lastFailure = passed
+      ? ""
+      : tasksDone
+        ? `${r.stdout}\n${r.stderr}`.trim().slice(-4000)
+        : "tasks.md still has unchecked boxes — finish the remaining tasks.";
     return {
       ...inputData,
       trace: [...inputData.trace, "validate"],
       validatePassed: passed,
+      lastFailure,
     };
   },
 });
@@ -273,7 +298,7 @@ const buildResult = createStep({
       );
     if (!resumeData)
       return await suspend({
-        reason: "validate failed after 3 build attempts",
+        reason: `validate failed after ${inputData.attempts} build attempts`,
         attempts: inputData.attempts,
       });
     return {
@@ -283,7 +308,7 @@ const buildResult = createStep({
   },
 });
 
-/** The build↔validate retry edge: repeat until validate passes or 3 attempts. */
+/** The build↔validate retry edge: repeat until validate passes or the attempt budget. */
 const buildValidate = createWorkflow({
   id: "build-validate",
   inputSchema: Ctx,
@@ -304,7 +329,7 @@ export const sdlcWorkflow = createWorkflow({
   .dountil(
     buildValidate,
     async ({ inputData }) =>
-      inputData.validatePassed || inputData.attempts >= 3,
+      inputData.validatePassed || inputData.attempts >= MAX_BUILD_ATTEMPTS,
   )
   .then(buildResult)
   .then(review)
@@ -328,5 +353,6 @@ export const initialCtx = (
   trace: [],
   validatePassed: false,
   attempts: 0,
+  lastFailure: "",
   auto,
 });
