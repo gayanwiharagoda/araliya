@@ -1,0 +1,5 @@
+# Agentic SDLC workflow mode. See docs/workflow-modes.md in agentic-sdlc.
+mode: supervised
+github:
+  issues: true
+  project: "gayanwiharagoda/5"
